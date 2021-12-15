@@ -1,15 +1,19 @@
+from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from collections import UserDict
 from typing import Dict
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import Type
 
 from envelope import WS_ERRORS
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
-from envelope.handlers.base import AsyncHandler
-from envelope.messages.base import Message
+
+if TYPE_CHECKING:
+    from envelope.handlers.base import AsyncHandler
+    from envelope.messages.base import Message
 
 global_message_registry = {}
 global_handler_registry = {}
@@ -18,7 +22,6 @@ global_handler_registry = {}
 class Registry(UserDict, ABC):
     name: str
     global_registry: dict  # Also for testing injection
-    type: Optional[Type] = None
 
     def __init__(self, name):
         super().__init__()
@@ -34,14 +37,18 @@ class Registry(UserDict, ABC):
         Return a dict where every instance of this registry type will be stored
         """
 
+    def get_type(self) -> Optional[Type]:
+        ...
+
     def add(self, klass):
         self[klass.name] = klass
 
     def __setitem__(self, name, klass):
         assert getattr(klass, "name", None), "%s must have a 'name' attribute" % klass
         assert name == klass.name
-        if self.type:
-            assert issubclass(klass, self.type)
+        type = self.get_type()
+        if type:
+            assert issubclass(klass, type)
         klass.registries().add(self.name)
         super().__setitem__(name, klass)
 
@@ -49,13 +56,21 @@ class Registry(UserDict, ABC):
 class MessageRegistry(Registry):
     global_registry = global_message_registry
     data: Dict[str, Type[Message]]
-    type = Message
+
+    def get_type(self) -> Optional[Type]:
+        from envelope.messages.base import Message
+
+        return Message
 
 
 class HandlerRegistry(Registry):
     global_registry = global_handler_registry
     data: Dict[str, Type[AsyncHandler]]
-    type = AsyncHandler
+
+    def get_type(self) -> Optional[Type]:
+        from envelope.handlers import AsyncHandler
+
+        return AsyncHandler
 
     async def apply(self, message, **kwargs) -> dict:
         result = {}

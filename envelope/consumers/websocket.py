@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import timedelta
 from logging import getLogger
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -12,18 +13,20 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.utils.timezone import now
 from django.utils.translation import activate
+from pydantic import ValidationError
+
 from envelope.consumers.utils import get_language
 from envelope.envelope import ErrorEnvelope
 from envelope.envelope import IncomingWebsocketEnvelope
 from envelope.envelope import OutgoingWebsocketEnvelope
-from envelope.helpers import InternalTransport
+from envelope import InternalTransport
+from envelope.jobs import mark_connection_action
 from envelope.jobs import signal_websocket_close
 from envelope.jobs import signal_websocket_connect
 from envelope.messages.base import ErrorMessage
 from envelope.messages.base import Message
 from envelope.messages.errors import ValidationErrorMsg
 from envelope.utils import get_handler_registry
-from pydantic import ValidationError
 
 if TYPE_CHECKING:
     pass
@@ -48,6 +51,11 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
     last_sent: datetime = None
     last_recv: datetime = None
     last_error: Optional[datetime] = None
+    # Last time we sent something to a queue which will update this consumers
+    # connection status within the db. See models.Connection
+    last_job: Optional[datetime] = None
+    # Number of seconds to wait before despatching a connection update job.
+    connection_update_interval: Optional[timedelta] = None
     # protected_subscriptions: Dict[str, ChannelSubscription]
     # Send and queue connection signals?
     # They're a bad idea in most unit tests since they muck about with threading and db-access,
@@ -62,6 +70,11 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self.protected_subscriptions = {}
         self.enable_connection_signals = enable_connection_signals
+        seconds = getattr(settings, "ENVELOPE_CONNECTION_UPDATE_INTERVAL", 180)
+        if seconds:
+            self.connection_update_interval = timedelta(seconds=seconds)
+        # Set timestamps
+        self.last_job = self.last_sent = self.last_recv = now()
 
     async def connect(self):
         self.language = get_language(self.scope)
@@ -71,10 +84,6 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             # FIXME: Allow anon connections?
             logger.debug("Invalid token, closing connection")
             raise DenyConnection()
-        # Save for later use in case of invalidation of the user object
-        # self.user_pk = self.user.pk
-        # And mark action
-        self.last_sent = self.last_recv = now()
         logger.debug("Connection for user: %s", self.user)
         await self.accept()
         logger.debug(
@@ -94,6 +103,7 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             )
             # We only need to signal disconnect for an actual user
             if self.enable_connection_signals:
+                self.last_job = now()  # We probably don't need to care about this :)
                 self.dispatch_close(close_code)
         else:
             logger.debug("Disconnect was from anon, close code %s", close_code)
@@ -115,6 +125,13 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             language=self.language,
             user_pk=self.user and self.user.pk or None,
         )
+
+    def update_connection(self):
+        if self.connection_update_interval is not None:
+            if now() - self.last_job > self.connection_update_interval:
+                mark_connection_action.delay(
+                    action_at=now(), consumer_name=self.channel_name
+                )
 
     async def receive(self, text_data=None, bytes_data=None):
         """
@@ -141,10 +158,13 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         # FIXME Other recoverable errors?
         except ValidationError as exc:
             error = ValidationErrorMsg.from_message(message, errors=exc.errors())
-            return await self.send_ws_error(error)
+            await self.send_ws_error(error)
         except ErrorMessage as exc:
             # A message-aware exception can simply be sent directly
-            return await self.send_ws_error(exc)
+            await self.send_ws_error(exc)
+        # And finally decide if we should mark connection as active,
+        # or if other actions from incoming messages have already sorted that out
+        self.update_connection()
 
     async def handle_message(self, message):
         """
@@ -178,6 +198,7 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
     async def send_ws_message(self, message, state=None):
         if isinstance(message, Message):
             self.outgoing_envelope.is_compatible(message, exception=True)
+            message.validate()  # This is not a user error in case it goes wrong, so we shouldn't catch this
             envelope = self.outgoing_envelope.pack(message)
         else:
             raise TypeError("message is not a Message instance")
@@ -243,17 +264,19 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             user_pk=self.user_pk,
             consumer_name=self.channel_name,
             language=self.language,
+            online_at=now(),
         )
 
     def dispatch_close(self, close_code):
         """
-        Ask as worker to signal instead of doing it here.
+        Ask a worker to signal instead of doing it here.
         """
         return signal_websocket_close.delay(
             user_pk=self.user_pk,
             consumer_name=self.channel_name,
             close_code=close_code,
             language=self.language,
+            offline_at=now(),
         )
 
     # def mark_subscribed(self, subscription: ChannelSubscription):

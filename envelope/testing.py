@@ -1,16 +1,13 @@
 from envelope.decorators import add_message
 
-# from envelope.decorators import add_message
 from envelope.messages.base import AsyncRunnable
 from envelope.messages.base import Message
 from envelope.registry import MessageRegistry
+from envelope.registry import HandlerRegistry
 
 
-# class TestingMessageRegistry(MessageRegistry):
-#     global_registry = {}  # Override to they don't end up in global reg
-
-
-testing_registry = MessageRegistry("testing")
+testing_messages = MessageRegistry("testing")
+testing_handlers = HandlerRegistry("testing")
 
 
 @add_message("testing")

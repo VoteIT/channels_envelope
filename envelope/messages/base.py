@@ -9,6 +9,13 @@ from typing import TYPE_CHECKING
 from typing import Type
 from typing import TypeVar
 from typing import Union
+
+from django.conf import settings
+from django.db import transaction
+from django.utils.timezone import now
+from django.utils.translation import activate
+from envelope import MessageStates
+from envelope.models import Connection
 from pydantic import BaseModel
 
 from django.contrib.auth import get_user_model
@@ -61,19 +68,6 @@ class NoPayload(BaseModel):
 S = TypeVar("S")
 
 
-class MessageStates:
-    """
-    Message state constants
-    """
-
-    ACKNOWLEDGED = "a"
-    QUEUED = "q"
-    RUNNING = "r"
-    SUCCESS = "s"
-    FAILED = "f"
-    MESSAGE_STATES = {ACKNOWLEDGED, QUEUED, RUNNING, SUCCESS, FAILED}
-
-
 class Message(MessageStates, Generic[S], ABC):
     mm: MessageMeta
     data: S
@@ -119,14 +113,15 @@ class Message(MessageStates, Generic[S], ABC):
             self.validate()
 
     @classmethod
-    def from_message(cls, message: Message, **kwargs) -> Message:
+    def from_message(
+        cls, message: Message, _registry: Optional[str] = None, **kwargs
+    ) -> Message:
         mm = MessageMeta(**message.mm.dict(exclude={"registry"}))
-        # _registry = None
-        # if _registry is None:
-        #     assert (
-        #         _registry in cls.registries()
-        #     ), "Specified registry not valid for this message type"
-        #     mm.registry = _registry
+        if _registry is not None:
+            assert (
+                _registry in cls.registries()
+            ), "Specified registry not valid for this message type"
+            mm.registry = _registry
         return cls(mm=mm, **kwargs)
 
     @property
@@ -157,6 +152,14 @@ class Message(MessageStates, Generic[S], ABC):
             return User.objects.filter(pk=self.mm.user_pk).first()
         return None
 
+    @cached_property
+    def connection(self) -> Optional[Connection]:
+        """
+        Fetch Connection based on consumer name. Consumer names shouldn't be reused.
+        """
+        if self.mm.consumer_name:
+            return Connection.objects.filter(channel_name=self.mm.consumer_name).first()
+
 
 class AsyncRunnable(Message, ABC):
     """
@@ -174,87 +177,39 @@ class ErrorMessage(Message, Generic[S], Exception, ABC):
     ...
 
 
-# class DeferredJob(Message, ABC):
-#     """
-#     Command/query can be deferred to a job queue.
-#     Must be used together with BaseIncomingMessage or BaseOutgoingMessage"""
-#
-#     # queue_name = DEFAULT_QUEUE
-#     # job_timeout = 7
-#     # autocommit = True
-#     # is_async = True
-#     job_func = "voteit.messaging.jobs.handle_job_message"
-#     job_atomic: bool = True
-#     on_worker: bool = False
-#     # Markers for type checking
-#     mm: MessageMeta
-#     data: BaseModel  # But really the schema
-#     should_run: bool = True  # Mark as false to abort run
-#
-#     async def pre_queue(self, consumer):
-#         """
-#         Do something before entering the queue. Only applies to when the consumer receives the message.
-#         It's a good idea to avoid using this if it's not needed.
-#         """
-#
-#     def queue(self):
-#         # FIXME: Queues and django_rq are kind of a mess right now
-#         from voteit.messaging.jobs import run_job
-#
-#         if not self.should_run:
-#             return
-#         print("HELLO FROM ENQUEUE")
-#         # kwargs = dict(
-#         #     msg_data=self.data.dict(),  # FIXME: Json encode instead?
-#         #     mm_data=self.mm.dict(),
-#         #     incoming=isinstance(self, BaseIncomingMessage),
-#         #     atomic=self.job_atomic,
-#         # )
-#         # if queue:
-#         #     return queue.enqueue(run_job, **kwargs)
-#         # # Job-decorated queue
-#         # return run_job.delay(**kwargs)
-#
-#         # kwargs = dict(
-#         #     atomic=self.job_atomic,
-#         #      msg_data=self.data.dict(),
-#         #      mm_data=self.mm.dict(),
-#         # )
-#         # queue = get_queue(name=self.queue, is_async=self.is_async, serializer=JSONSerializer)
-#         # queue.enqueue("voteit.messaging.jobs.run_job", timeout=self.job_timeout, kwargs=kwargs)
-#
-#         # queue = get_queue(
-#         #     self.queue,
-#         #     autocommit=self.autocommit,
-#         #     #default_timeout=self.job_timeout,
-#         #     is_async=self.is_async,
-#         #     serializer=JSONSerializer,
-#         # )
-#         # queue.enqueue(
-#         #     "voteit.messaging.jobs.run_job",
-#         #     job_timeout=self.job_timeout,
-#         #
-#         #     atomic=self.job_atomic,
-#         #     msg_data=self.data.dict(),
-#         #     mm_data=self.mm.dict(),
-#         # )
-#
-#     @classmethod
-#     def from_job(
-#         cls, msg_data, mm_data, incoming=True
-#     ) -> Union[DeferredJob, MessageABC]:
-#         if incoming:
-#             registry = get_incoming_registry()
-#         else:
-#             registry = get_outgoing_registry()
-#         mm = MessageMeta(**mm_data)
-#         # Key error here would be a programming error, not a validation error
-#         msg_cls = registry[mm.type]
-#         instance = msg_cls(mm, msg_data)
-#         instance.on_worker = True
-#         return instance
-#
-#     @abstractmethod
-#     def run_job(self):
-#         """Run this within the worker to do the actual job"""
-#         pass
+class DeferredJob(Message, ABC):
+    """
+    Command/query can be deferred to a job queue
+    """
+
+    # job_timeout = 7
+    # autocommit = True
+    # is_async = True
+    atomic: bool = True
+    on_worker: bool = False
+    # Markers for type checking
+    mm: MessageMeta
+    data: BaseModel  # But really the schema
+    should_run: bool = True  # Mark as false to abort run
+
+    async def pre_queue(self, consumer):
+        """
+        Do something before entering the queue. Only applies to when the consumer receives the message.
+        It's a good idea to avoid using this if it's not needed.
+        """
+
+    @property
+    def job(self):
+        from envelope.jobs import default_incoming_websocket
+
+        return default_incoming_websocket
+
+    def enqueue(self):
+        return self.job.delay(
+            t=self.name, mm=self.mm.dict(), data=self.data.dict(), enqueued_at=now()
+        )
+
+    @abstractmethod
+    def run_job(self):
+        """Run this within the worker to do the actual job"""
+        pass

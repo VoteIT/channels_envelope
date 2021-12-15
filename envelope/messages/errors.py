@@ -2,7 +2,7 @@ from typing import Optional
 
 from envelope import WS_ERRORS
 from envelope.decorators import add_message
-from envelope.messages.base import ErrorMessage
+from envelope.messages import ErrorMessage
 from pydantic import BaseModel
 from typing import List
 

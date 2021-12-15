@@ -1,14 +1,23 @@
+from datetime import datetime
 from logging import getLogger
 from typing import Optional
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.utils.timezone import now
 from django.utils.translation import activate
+from django_rq import job
+
 from envelope import CONNECTIONS_QUEUE
+from envelope.envelope import IncomingWebsocketEnvelope
+from envelope.handlers.deferred_job import DeferredJob
+from envelope.messages import ErrorMessage
+from envelope.models import Connection
 from envelope.signals import client_close
 from envelope.signals import client_connect
 from envelope.utils import update_connection_status
-from django_rq import job
+from envelope.utils import websocket_send_error
 
 User = get_user_model()
 
@@ -33,16 +42,24 @@ def signal_websocket_connect(
     user_pk: int = None,
     consumer_name: str = "",
     language: Optional[str] = None,
+    online_at: datetime = None,
 ):
     """
     This job handles the sync code for a user connecting to a consumer.
     """
+    assert online_at
     user = User.objects.get(
         pk=user_pk
     )  # User should always exist when this job is dispatched
     _set_lang(language)
     logger.debug("%s connected consumer %s", user_pk, consumer_name)
-    conn = update_connection_status(user=user, channel_name=consumer_name, online=True)
+    conn = update_connection_status(
+        user=user,
+        channel_name=consumer_name,
+        online=True,
+        online_at=online_at,
+        last_action=online_at,  # Yes same
+    )
     client_connect.send(
         sender=None,
         user=user,
@@ -57,12 +74,16 @@ def signal_websocket_close(
     consumer_name: str = "",
     close_code: int = None,
     language: Optional[str] = None,
+    offline_at: datetime = None,
 ):
+    assert offline_at
     user = User.objects.get(
         pk=user_pk
     )  # User should always exist when this job is dispatched
     _set_lang(language)
-    conn = update_connection_status(user, channel_name=consumer_name, online=False)
+    conn = update_connection_status(
+        user, channel_name=consumer_name, online=False, offline_at=offline_at
+    )
     logger.debug(
         "%s disconnected consumer %s. close_code: %s",
         user_pk,
@@ -77,3 +98,50 @@ def signal_websocket_close(
         close_code=close_code,
         connection=conn,
     )
+
+
+@job(CONNECTIONS_QUEUE)
+def mark_connection_action(
+    consumer_name: str = "",
+    action_at: datetime = None,
+):
+    conn: Connection = Connection.objects.get(channel_name=consumer_name)
+    conn.last_action = action_at
+    conn.save()
+
+
+@job("default")
+def default_incoming_websocket(
+    t: str, data: dict, mm: dict, enqueued_at: datetime = None
+):
+    env = IncomingWebsocketEnvelope(t=t, p=data)
+    msg = env.unpack(mm=mm)
+    run_job(msg, enqueued_at=enqueued_at)
+
+
+def run_job(msg: DeferredJob, enqueued_at: datetime = None):
+    msg.on_worker = True
+    if msg.connection:
+        # We could've used enqueued_at from RQ if it had supported TZ :(
+        if enqueued_at is None:
+            enqueued_at = now()
+        if msg.connection.last_action < enqueued_at:
+            msg.connection.last_action = enqueued_at
+            msg.connection.save()
+    msg.validate()  # We already know this is valid since it has passed the consumers handle func
+    if msg.mm.language:
+        # Otherwise skip lang?
+        activate(msg.mm.language)
+    try:
+        if msg.atomic:
+            with transaction.atomic(durable=True):
+                msg.run_job()
+        else:
+            msg.run_job()
+    except ErrorMessage as err:  # Catchable, nice errors
+        if err.mm.id is None:
+            err.mm.id = msg.mm.id
+        if err.mm.consumer_name is None:
+            err.mm.consumer_name = msg.mm.consumer_name
+        if err.mm.consumer_name:
+            websocket_send_error(err, err.mm.consumer_name)

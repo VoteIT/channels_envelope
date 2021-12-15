@@ -1,12 +1,8 @@
-from envelope.handlers.base import AsyncHandler
-from envelope.messages.base import Message
-
-
 def add_message(*namespaces):
     """
     Decorator to add messages to a specific message registry.
 
-    >>> from envelope.testing import testing_registry
+    >>> from envelope.testing import testing_messages
     >>> from envelope.messages import Message
 
     >>> @add_message('testing')
@@ -14,7 +10,7 @@ def add_message(*namespaces):
     ...     name='hello_world'
     ...
 
-    >>> 'hello_world' in testing_registry
+    >>> 'hello_world' in testing_messages
     True
     """
 
@@ -33,8 +29,26 @@ def add_message(*namespaces):
 
 
 def add_handler(*namespaces):
+    """
+    Decorator to add message handlers to a specific registry.
+
+    >>> from envelope.testing import testing_handlers
+    >>> from envelope.handlers import AsyncHandler
+
+    >>> @add_handler('testing')
+    ... class HelloWorld(AsyncHandler):
+    ...     name='hello_world'
+    ...
+    ...     def check(self): return True
+    ...
+    ...     async def run(self): ...
+    ...
+
+    >>> 'hello_world' in testing_handlers
+    True
+    """
+
     def _inner(cls):
-        assert issubclass(cls, AsyncHandler)
         from envelope.registry import global_handler_registry
 
         for name in namespaces:

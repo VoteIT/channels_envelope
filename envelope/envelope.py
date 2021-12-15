@@ -5,10 +5,9 @@ from abc import abstractmethod
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from envelope.messages.errors import MessageTypeError
+from envelope import MessageStates
 from envelope.registry import HandlerRegistry
 from envelope.registry import MessageRegistry
-from envelope.messages.base import Message
 from envelope.registry import ws_error_handlers
 from envelope.registry import ws_error_messages
 from envelope.registry import ws_incoming_handlers
@@ -24,6 +23,7 @@ from pydantic import validator
 if TYPE_CHECKING:
     from channels.consumer import AsyncConsumer
     from envelope.messages import MessageMeta
+    from envelope.messages.base import Message
 
 
 class Envelope(ABC):
@@ -63,6 +63,8 @@ class Envelope(ABC):
         try:
             msg_class = self.message_registry[self.data.t]
         except KeyError:
+            from envelope.messages.errors import MessageTypeError
+
             raise MessageTypeError(
                 mm=mm,
                 registry=self.message_registry.name,
@@ -121,9 +123,6 @@ class EnvelopeSchema(BaseModel):
     p: Optional[dict]
     i: Optional[str] = Field(
         max_length=20,
-        # default_factory=lambda: "".join(
-        #     random.choices(string.ascii_letters + string.digits, k=6)
-        # ),
     )
 
 
@@ -136,13 +135,13 @@ class OutgoingEnvelopeSchema(EnvelopeSchema):
 
     @validator("s")
     def validate_state(cls, v):
-        if v and v not in Message.MESSAGE_STATES:
+        if v and v not in MessageStates.MESSAGE_STATES:
             raise ValueError("%s is not a valid message state" % v)
         return v
 
 
 class ErrorSchema(OutgoingEnvelopeSchema):
-    s: str = Field(Message.FAILED, const=True)
+    s: str = Field(MessageStates.FAILED, const=True)
 
 
 class IncomingWebsocketEnvelope(Envelope):

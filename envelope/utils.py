@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -9,7 +10,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import transaction
 
 from envelope import WS_TRANSPORT_NAME
-from envelope.helpers import InternalTransport
+from envelope import InternalTransport
 from envelope.envelope import Envelope
 from envelope.envelope import ErrorEnvelope
 from envelope.envelope import OutgoingWebsocketEnvelope
@@ -32,6 +33,9 @@ def update_connection_status(
     channel_name: str,
     online: Optional[bool] = True,
     awol: Optional[bool] = None,
+    online_at: Optional[datetime] = None,
+    offline_at: Optional[datetime] = None,
+    last_action: Optional[datetime] = None,
 ) -> Connection:
     """
     This is sync-only code so don't call this in any async context!
@@ -39,6 +43,7 @@ def update_connection_status(
     conn, created = Connection.objects.get_or_create(
         user=user, channel_name=channel_name
     )
+    conn: Connection
     send_terminated = False
     if online is not None:  # We might not know
         if conn.online == True and online == False:
@@ -46,6 +51,12 @@ def update_connection_status(
         conn.online = online
     if awol is not None:
         conn.awol = awol
+    if online_at:
+        conn.online_at = online_at
+    if offline_at:
+        conn.offline_at = offline_at
+    if last_action:
+        conn.last_action = last_action
     conn.save()
     if send_terminated:
         connection_terminated.send(sender=Connection, connection=conn, awol=conn.awol)
