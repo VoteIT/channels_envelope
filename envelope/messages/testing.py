@@ -15,8 +15,8 @@ from pydantic import validator
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.decorators import add_message
-from envelope.messages.base import DeferredJob
-from envelope.messages.base import Message
+from envelope.messages.actions import DeferredJob
+from envelope.messages import Message
 from envelope.messages.common import ProgressNum
 from envelope.signals import client_connect
 from envelope.utils import websocket_send
@@ -43,7 +43,7 @@ class PleasantrySchema(BaseModel):
 
 
 @add_message(WS_OUTGOING)
-class Pleasantry(Message):
+class Pleasantry(Message[PleasantrySchema]):
     name = "testing.hello"
     schema = PleasantrySchema
 
@@ -62,10 +62,9 @@ class CountSchema(BaseModel):
 
 
 @add_message(WS_INCOMING)
-class Count(DeferredJob):
+class Count(DeferredJob[CountSchema]):
     name = "testing.count"
     schema = CountSchema
-    data: CountSchema
 
     async def pre_queue(self, consumer: EnvelopeWebsocketConsumer):
         msg = ProgressNum.from_message(

@@ -1,10 +1,13 @@
 from typing import Optional
 
+from django.db.models import Model
 from envelope import WS_ERRORS
 from envelope.decorators import add_message
 from envelope.messages import ErrorMessage
 from pydantic import BaseModel
 from typing import List
+
+from pydantic import validator
 
 
 class ErrorSchema(BaseModel):
@@ -37,6 +40,36 @@ class MessageTypeError(ErrorMessage[MessageTypeErrorSchema]):
     name = "error.msg_type"
     schema = MessageTypeErrorSchema
 
-    # @property
-    # def default_msg(self):
-    #     return f"No message type {self.data.type_name} within registry {self.data.registry}"
+
+class NotFoundSchema(BaseModel):
+    model: str
+    key: str = "pk"
+    value: str
+
+    @validator("model", pre=True)
+    def fetch_natural_key(cls, v):
+        if isinstance(v, str):
+            return v
+        elif isinstance(v, Model):
+            v = v.__class__
+        if issubclass(v, Model):
+            return f"{v._meta.app_label}.{v._meta.model_name.lower()}"
+        raise ValueError(
+            "Needs to be a string or instance/class based on djangos Model"
+        )
+
+
+@add_message(WS_ERRORS)
+class NotFoundError(ErrorMessage[NotFoundSchema]):
+    name = "error.not_found"
+    schema = NotFoundSchema
+
+
+class UnauthorizedSchema(NotFoundSchema):
+    permission: str
+
+
+@add_message(WS_ERRORS)
+class UnauthorizedError(ErrorMessage[UnauthorizedSchema]):
+    name = "error.unauthorized"
+    schema = UnauthorizedSchema

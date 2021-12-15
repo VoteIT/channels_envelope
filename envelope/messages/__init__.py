@@ -1,8 +1,9 @@
 # API
 from .base import Message
 from .base import ErrorMessage
-from .base import AsyncRunnable
 from .base import MessageMeta
+
+from .actions import AsyncRunnable
 
 
 def register_messages():

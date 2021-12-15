@@ -349,3 +349,193 @@ Or if you cause a validation error in Pydantic:
 True
 
 ```
+
+## Messages that perform actions
+
+Since websockets and channels are part of the async domain and Django's tied to sync code,
+we'll need to bridge these to somehow.
+
+We mainly handle this by deferring actions to a queue. (We already built connections for RQ)
+
+Actions would basically be what you would do through a REST API, and many
+times it might be better to do those actions via REST.
+
+Anything performing a background task should inherit the class `DeferredJob`.
+It needs a few more items. Here's a basic example to fetch a users name.
+
+Since we're inside the worker when any actions are processed we don't have access to the
+consumer and its method. To send messages outside of the consumer we'll use
+`websocket_send`. And for that to work we need to add the messages to the default websocket
+channels.
+
+Note: We're going to run these messages like unittests rather than through workers since
+this is just documentation :)
+
+``` python
+
+>>> from django.contrib.auth import get_user_model
+>>> User = get_user_model()
+>>> jane_doe = User.objects.create(username='jane', first_name='Jane', last_name='Doe')
+>>> isinstance(jane_doe, User)
+True
+
+>>> from envelope.messages.actions import DeferredJob
+>>> from envelope.utils import websocket_send
+>>> from envelope import WS_INCOMING, WS_OUTGOING
+
+>>> class FetchUserSchema(BaseModel):
+...     username: str
+...
+
+
+>>> @add_message(WS_INCOMING)
+... class FetchUser(DeferredJob[FetchUserSchema]):
+...     name = 'user.fetch'
+...     schema = FetchUserSchema
+...
+...     def run_job(self):
+...         # This is what's running inside the worker
+...         user = User.objects.get(username=self.data.username)
+...         # To use _orm we need orm mode enabled for the schema the response uses. See below
+...         response = UserData.from_message(self, _orm=user)
+...         websocket_send(response, self.mm.consumer_name, state=self.SUCCESS)
+...         return response  # To make unittesting easier!
+
+
+>>> class UserSchema(BaseModel):
+...     username: str
+...     first_name: str
+...     last_name: str
+...     pk: int
+...
+...     class Config:
+...         orm_mode=True
+
+
+>>> @add_message(WS_OUTGOING)
+... class UserData(Message[UserSchema]):
+...     name = "user.data"
+...     schema = UserSchema
+...
+
+# And let's try it out - we'll fake message meta (mm)
+
+>>> msg = FetchUser(mm={'consumer_name': 'abc'}, username='jane')
+
+Normally workers validate the messages before they call run_job, so we'll do that too.
+
+>>> msg.validate()
+>>> response = msg.run_job()
+>>> response.name
+'user.data'
+>>> data = response.data.dict()
+>>> 'pk' in data
+True
+>>> data.pop('pk') == jane_doe.pk
+True
+>>> data
+{'username': 'jane', 'first_name': 'Jane', 'last_name': 'Doe'}
+
+
+```
+
+This common operation can be shortened a bit if we think about the specific user as a context
+this action's performed on. That way we can also add permissions and similar.
+(We recommend using Django `rules` for instance)
+
+We'll use `ContextAction` together with a schema, 
+and a model to create an update action for our user.
+
+`ContextAction` is a subclass of `DeferredJob` so it will normally be run inside a worker aswell.
+
+We won't much about with permissions for this demonstration, 
+so let's just add a superuser to test against.
+
+``` python
+
+
+>>> from typing import Optional
+>>> from envelope.messages.actions import ContextAction
+
+>>> class UpdateUserSchema(BaseModel):
+...     pk: int
+...     first_name: Optional[str]
+...     last_name: Optional[str]
+...
+
+
+>>> @add_message(WS_INCOMING)
+... class UpdateUser(ContextAction[UpdateUserSchema, User]):
+...     name = 'user.update'
+...     schema = UpdateUserSchema
+...     model = User
+...     context_pk_attr = 'pk'
+...     permission = 'user.change_user'
+...
+...     def run_job(self):
+...         self.assert_perm()
+...         user: User = self.context  # Fetched based on schema
+...         to_modify = self.data.dict(exclude={'pk'}, exclude_none=True)
+...         if to_modify:
+...             for (k, v) in to_modify.items():
+...                 setattr(user, k, v)
+...             user.save()
+...         response = UserData.from_message(self, _orm=user)
+...         websocket_send(response, self.mm.consumer_name, state=self.SUCCESS)
+...         return response
+
+A difference here is that we need to specify user to make this work.
+This will be attached to message meta by the consumer, so we'll add it manually fo this test.
+
+>>> jane_doe.is_superuser = True
+>>> jane_doe.save()
+>>> msg = UpdateUser(mm={'consumer_name': 'abc', 'user_pk': jane_doe.pk}, pk=jane_doe.pk, first_name='Jennifer')
+>>> msg.validate()
+>>> response = msg.run_job()
+>>> response.name
+'user.data'
+>>> data = response.data.dict(exclude={'pk'})
+>>> data
+{'username': 'jane', 'first_name': 'Jennifer', 'last_name': 'Doe'}
+
+Since Jane/Jennifer turned superuser, this worked out. Lets turn that off and catch the error.
+The method that checks permissions is called `allowed`, it will simply return a bool.
+If we run assert_perm instead we'll get an exception with some details.
+
+>>> jane_doe.is_superuser = False
+>>> jane_doe.save()
+>>> from envelope.messages.errors import UnauthorizedError
+
+Messages cache user objects, we'll simply refresh it
+
+>>> msg.user.refresh_from_db()
+>>> error=None
+>>> try:
+...     msg.assert_perm()
+... except UnauthorizedError as err:
+...     error=err
+...
+
+>>> isinstance(error, UnauthorizedError)
+True
+>>> error.name
+'error.unauthorized'
+
+While errors are exceptions, they're also messages that can be sent and accessed.
+They can even cause side-effects like signal logut.
+
+>>> data = error.data.dict()
+>>> data['key']
+'pk'
+
+
+>>> int(data['value']) == jane_doe.pk
+True
+>>> data['permission']
+'user.change_user'
+
+This is djangos natural key, that the model will be converted to
+>>> data['model'] == f"{User._meta.app_label}.{User._meta.model_name.lower()}"
+True
+
+```

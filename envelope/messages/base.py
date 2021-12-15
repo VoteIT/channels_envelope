@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from typing import Any
 from typing import Generic
 from typing import Optional
 from typing import Set
@@ -10,10 +11,7 @@ from typing import Type
 from typing import TypeVar
 from typing import Union
 
-from django.conf import settings
-from django.db import transaction
-from django.utils.timezone import now
-from django.utils.translation import activate
+
 from envelope import MessageStates
 from envelope.models import Connection
 from pydantic import BaseModel
@@ -65,14 +63,13 @@ class NoPayload(BaseModel):
     pass
 
 
-S = TypeVar("S")
+S = TypeVar("S")  # schema
 
 
 class Message(MessageStates, Generic[S], ABC):
     mm: MessageMeta
-    data: S
     schema: Type[S] = NoPayload
-    initial_data: dict
+    initial_data: Optional[dict]
 
     def __init_subclass__(cls, **kwargs):
         cls.__registries = set()
@@ -93,6 +90,8 @@ class Message(MessageStates, Generic[S], ABC):
         self,
         mm: Union[dict, MessageMeta] = None,
         data: Optional[dict] = None,
+        _registry: Optional[str] = None,
+        _orm: Optional[Any] = None,
         **kwargs,
     ):
         if mm is None:
@@ -103,29 +102,34 @@ class Message(MessageStates, Generic[S], ABC):
             assert isinstance(self.name, str), "Name attribute is not set as a string"
             mm["type_name"] = self.name
             self.mm = MessageMeta(**mm)
-        if data is None:
-            data = {}
-        data.update(kwargs)
-        self.initial_data = data
-        self._data = None
-        self._validated = False
+        if _registry is not None:
+            assert (
+                _registry in self.registries()
+            ), "Specified registry not valid for this message type"
+            self.mm.registry = _registry
+        if _orm is not None:
+            assert data is None, "Can only specify data or _orm"
+            assert not kwargs, "kwargs and _orm isn't supported together"
+            self.initial_data = _orm
+            self._data = self.schema.from_orm(_orm)
+            self._validated = True
+        else:
+            if data is None:
+                data = {}
+            data.update(kwargs)
+            self.initial_data = data
+            self._data = None
+            self._validated = False
         if self.schema is NoPayload:
             self.validate()
 
     @classmethod
-    def from_message(
-        cls, message: Message, _registry: Optional[str] = None, **kwargs
-    ) -> Message:
+    def from_message(cls, message: Message, **kwargs) -> Message:
         mm = MessageMeta(**message.mm.dict(exclude={"registry"}))
-        if _registry is not None:
-            assert (
-                _registry in cls.registries()
-            ), "Specified registry not valid for this message type"
-            mm.registry = _registry
         return cls(mm=mm, **kwargs)
 
     @property
-    def data(self):
+    def data(self) -> S:
         if self.is_validated:
             return self._data
         raise ValueError("data accessed before validation")
@@ -161,55 +165,8 @@ class Message(MessageStates, Generic[S], ABC):
             return Connection.objects.filter(channel_name=self.mm.consumer_name).first()
 
 
-class AsyncRunnable(Message, ABC):
-    """
-    This message is meant to be processed within the consumer.
-    It mustn't be blocking or run database queries.
-    Anything locking up the consumer will cause it to stop processing messages for that user.
-    """
-
-    @abstractmethod
-    async def run(self, consumer):
-        pass
-
-
 class ErrorMessage(Message, Generic[S], Exception, ABC):
-    ...
-
-
-class DeferredJob(Message, ABC):
-    """
-    Command/query can be deferred to a job queue
-    """
-
-    # job_timeout = 7
-    # autocommit = True
-    # is_async = True
-    atomic: bool = True
-    on_worker: bool = False
-    # Markers for type checking
-    mm: MessageMeta
-    data: BaseModel  # But really the schema
-    should_run: bool = True  # Mark as false to abort run
-
-    async def pre_queue(self, consumer):
-        """
-        Do something before entering the queue. Only applies to when the consumer receives the message.
-        It's a good idea to avoid using this if it's not needed.
-        """
-
-    @property
-    def job(self):
-        from envelope.jobs import default_incoming_websocket
-
-        return default_incoming_websocket
-
-    def enqueue(self):
-        return self.job.delay(
-            t=self.name, mm=self.mm.dict(), data=self.data.dict(), enqueued_at=now()
-        )
-
-    @abstractmethod
-    def run_job(self):
-        """Run this within the worker to do the actual job"""
-        pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.validate()  # Any validation error on errors should be handled straight away
+        self.initial_data = None  # We don't care...

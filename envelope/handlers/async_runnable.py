@@ -2,7 +2,7 @@ from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.decorators import add_handler
 from envelope.handlers.base import AsyncHandler
-from envelope.messages.base import AsyncRunnable
+from envelope.messages import AsyncRunnable
 
 
 @add_handler(WS_INCOMING, WS_OUTGOING)

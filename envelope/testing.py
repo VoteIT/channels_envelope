@@ -1,7 +1,7 @@
 from envelope.decorators import add_message
 
-from envelope.messages.base import AsyncRunnable
-from envelope.messages.base import Message
+from envelope.messages import AsyncRunnable
+from envelope.messages import Message
 from envelope.registry import MessageRegistry
 from envelope.registry import HandlerRegistry
 

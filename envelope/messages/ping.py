@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.decorators import add_message
-from envelope.messages.base import AsyncRunnable
-from envelope.messages.base import Message
+from envelope.messages import AsyncRunnable
+from envelope.messages import Message
 
 if TYPE_CHECKING:
     from envelope.consumers.websocket import EnvelopeWebsocketConsumer
