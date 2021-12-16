@@ -10,8 +10,10 @@ from typing import TypeVar
 
 from django.utils.functional import cached_property
 from django.utils.timezone import now
+from envelope import Error
 from envelope.messages import Message
 from envelope.messages import MessageMeta
+from envelope.utils import get_error_type
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -124,18 +126,13 @@ class ContextAction(DeferredJob, Generic[S, M], ABC):
         try:
             return self.model.objects.get(pk=pk)
         except self.model.DoesNotExist:
-            # FIXME: method to get errors
-            from envelope.messages.errors import NotFoundError
-
-            raise NotFoundError.from_message(
+            raise get_error_type(Error.NOT_FOUND).from_message(
                 self, model=self.model, key="pk", value=pk
             )
 
     def assert_perm(self):
         if not self.allowed():
-            from envelope.messages.errors import UnauthorizedError
-
-            raise UnauthorizedError.from_message(
+            raise get_error_type(Error.UNAUTHORIZED).from_message(
                 self,
                 model=self.model,
                 key="pk",

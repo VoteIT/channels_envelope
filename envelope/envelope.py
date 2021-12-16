@@ -5,15 +5,17 @@ from abc import abstractmethod
 from typing import Optional
 from typing import TYPE_CHECKING
 
+from envelope import Error
 from envelope import MessageStates
 from envelope.registry import HandlerRegistry
 from envelope.registry import MessageRegistry
-from envelope.registry import ws_error_handlers
-from envelope.registry import ws_error_messages
+from envelope.registry import default_error_handlers
+from envelope.registry import default_error_messages
 from envelope.registry import ws_incoming_handlers
 from envelope.registry import ws_incoming_messages
 from envelope.registry import ws_outgoing_handlers
 from envelope.registry import ws_outgoing_messages
+from envelope.utils import get_error_type
 from pydantic import BaseModel
 from pydantic import Field
 from typing import Type
@@ -63,9 +65,7 @@ class Envelope(ABC):
         try:
             msg_class = self.message_registry[self.data.t]
         except KeyError:
-            from envelope.messages.errors import MessageTypeError
-
-            raise MessageTypeError(
+            raise get_error_type(Error.MSG_TYPE)(
                 mm=mm,
                 registry=self.message_registry.name,
                 type_name=self.data.t,
@@ -161,5 +161,5 @@ class OutgoingWebsocketEnvelope(Envelope):
 class ErrorEnvelope(OutgoingWebsocketEnvelope):
     schema = ErrorSchema
     data: ErrorSchema
-    message_registry = ws_error_messages
-    handler_registry = ws_error_handlers
+    message_registry = default_error_messages
+    handler_registry = default_error_handlers

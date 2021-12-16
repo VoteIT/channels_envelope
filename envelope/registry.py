@@ -7,7 +7,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
 
-from envelope import WS_ERRORS
+from envelope import DEFAULT_ERRORS
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 
@@ -85,8 +85,8 @@ class HandlerRegistry(Registry):
 
 ws_incoming_messages = MessageRegistry(WS_INCOMING)
 ws_outgoing_messages = MessageRegistry(WS_OUTGOING)
-ws_error_messages = MessageRegistry(WS_ERRORS)
+default_error_messages = MessageRegistry(DEFAULT_ERRORS)
 
 ws_incoming_handlers = HandlerRegistry(WS_INCOMING)
 ws_outgoing_handlers = HandlerRegistry(WS_OUTGOING)
-ws_error_handlers = HandlerRegistry(WS_ERRORS)
+default_error_handlers = HandlerRegistry(DEFAULT_ERRORS)

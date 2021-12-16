@@ -1,7 +1,8 @@
 from typing import Optional
 
 from django.db.models import Model
-from envelope import WS_ERRORS
+from envelope import DEFAULT_ERRORS
+from envelope import Error
 from envelope.decorators import add_message
 from envelope.messages import ErrorMessage
 from pydantic import BaseModel
@@ -14,9 +15,9 @@ class ErrorSchema(BaseModel):
     msg: Optional[str]
 
 
-@add_message(WS_ERRORS)
+@add_message(DEFAULT_ERRORS)
 class GenericError(ErrorMessage[ErrorSchema]):
-    name = "error.generic"
+    name = Error.GENERIC
     schema = ErrorSchema
 
 
@@ -24,9 +25,9 @@ class ValidationErrorSchema(ErrorSchema):
     errors: List[dict]
 
 
-@add_message(WS_ERRORS)
+@add_message(DEFAULT_ERRORS)
 class ValidationErrorMsg(ErrorMessage[ValidationErrorSchema]):
-    name = "error.validation"
+    name = Error.VALIDATION
     schema = ValidationErrorSchema
 
 
@@ -35,9 +36,9 @@ class MessageTypeErrorSchema(ErrorSchema):
     registry: str
 
 
-@add_message(WS_ERRORS)
+@add_message(DEFAULT_ERRORS)
 class MessageTypeError(ErrorMessage[MessageTypeErrorSchema]):
-    name = "error.msg_type"
+    name = Error.MSG_TYPE
     schema = MessageTypeErrorSchema
 
 
@@ -59,9 +60,9 @@ class NotFoundSchema(BaseModel):
         )
 
 
-@add_message(WS_ERRORS)
+@add_message(DEFAULT_ERRORS)
 class NotFoundError(ErrorMessage[NotFoundSchema]):
-    name = "error.not_found"
+    name = Error.NOT_FOUND
     schema = NotFoundSchema
 
 
@@ -69,7 +70,7 @@ class UnauthorizedSchema(NotFoundSchema):
     permission: str
 
 
-@add_message(WS_ERRORS)
+@add_message(DEFAULT_ERRORS)
 class UnauthorizedError(ErrorMessage[UnauthorizedSchema]):
-    name = "error.unauthorized"
+    name = Error.UNAUTHORIZED
     schema = UnauthorizedSchema

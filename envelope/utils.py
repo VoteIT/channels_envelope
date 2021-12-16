@@ -8,22 +8,22 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth.models import AbstractUser
 from django.db import transaction
+from envelope import DEFAULT_ERRORS
+from envelope import Error
 
 from envelope import WS_TRANSPORT_NAME
 from envelope import InternalTransport
-from envelope.envelope import Envelope
-from envelope.envelope import ErrorEnvelope
-from envelope.envelope import OutgoingWebsocketEnvelope
 from envelope.messages.base import ErrorMessage
 from envelope.messages.base import Message
-from envelope.messages.errors import ValidationErrorMsg
 from envelope.models import Connection
 from envelope.signals import connection_terminated
 from pydantic import ValidationError
+from typing import Type
 
 if TYPE_CHECKING:
     from envelope.registry import HandlerRegistry
     from envelope.registry import MessageRegistry
+    from envelope.envelope import Envelope
 
 channel_layer = get_channel_layer()
 
@@ -77,6 +77,8 @@ def get_handler_registry(name: str) -> HandlerRegistry:
 
 def _prep_env(envelope) -> InternalTransport:
     text_data = envelope.data.json()
+    from envelope.envelope import ErrorEnvelope
+
     return InternalTransport(
         text_data=text_data,
         error=isinstance(envelope, ErrorEnvelope),
@@ -109,12 +111,18 @@ def websocket_send(
     """
     From sync world outside of the websocket consumer - send a message to a group or a specific consumer.
     """
+    from envelope.envelope import OutgoingWebsocketEnvelope
+
     assert isinstance(message, Message)
     try:
         message.validate()
     except ValidationError as exc:
-        error = ValidationErrorMsg.from_message(message, errors=exc.errors())
-        return websocket_send_error(error, channel_name, group=group)
+        error = get_error_type(Error.VALIDATION).from_message(
+            message, errors=exc.errors()
+        )
+        raise error
+        # OR send?
+        # return websocket_send_error(error, channel_name, group=group)
     OutgoingWebsocketEnvelope.is_compatible(message, exception=True)
     envelope = OutgoingWebsocketEnvelope.pack(message)
     if state:
@@ -133,8 +141,25 @@ def websocket_send_error(error: ErrorMessage, channel_name: str, group: bool = F
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
     """
+    from envelope.envelope import ErrorEnvelope
+
     assert isinstance(error, ErrorMessage)
+
     ErrorEnvelope.is_compatible(error, exception=True)
     envelope = ErrorEnvelope.pack(error)
     sender = WSSender(envelope, channel_name, group=group)
     sender()
+
+
+def get_message_type(message_name: str, _registry: str) -> Type[Message]:
+    reg = get_message_registry(_registry)
+    return reg[message_name]
+
+
+def get_error_type(
+    error_name: str, _registry: str = DEFAULT_ERRORS
+) -> Type[ErrorMessage]:
+    reg = get_message_registry(_registry)
+    klass = reg[error_name]
+    assert issubclass(klass, ErrorMessage)
+    return klass
