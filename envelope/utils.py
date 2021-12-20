@@ -8,21 +8,21 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth.models import AbstractUser
 from django.db import transaction
+from envelope import WS_SEND_ERROR_TRANSPORT
+from envelope import WS_SEND_TRANSPORT
+from pydantic import ValidationError
+from typing import Type
 from envelope import DEFAULT_ERRORS
 from envelope import Error
-
-from envelope import WS_TRANSPORT_NAME
-from envelope import InternalTransport
 from envelope.messages.base import ErrorMessage
 from envelope.messages.base import Message
 from envelope.models import Connection
 from envelope.signals import connection_terminated
-from pydantic import ValidationError
-from typing import Type
 
 if TYPE_CHECKING:
     from envelope.registry import HandlerRegistry
     from envelope.registry import MessageRegistry
+    from envelope.registry import ChannelRegistry
     from envelope.envelope import Envelope
 
 channel_layer = get_channel_layer()
@@ -75,30 +75,46 @@ def get_handler_registry(name: str) -> HandlerRegistry:
     return global_handler_registry[name]
 
 
-def _prep_env(envelope) -> InternalTransport:
-    text_data = envelope.data.json()
-    from envelope.envelope import ErrorEnvelope
+def get_channel_registry(name: str) -> ChannelRegistry:
+    from envelope.registry import global_channel_registry
 
-    return InternalTransport(
-        text_data=text_data,
-        error=isinstance(envelope, ErrorEnvelope),
-        type=WS_TRANSPORT_NAME,
-    )
+    return global_channel_registry[name]
 
 
-class WSSender:
+class SenderUtil:
+    """
+    Takes care of sending data to channels.
+    Made callable so it can be added to the on_commit hook in django.
+    """
+
     # FIXME: Allow channel layer specification?
-    def __init__(self, envelope: Envelope, channel_name: str, group: bool = False):
+    def __init__(
+        self,
+        envelope: Envelope,
+        channel_name: str,
+        group: bool = False,
+        transport: str = None,
+        as_dict: bool = False,
+    ):
         self.envelope = envelope
         self.channel_name = channel_name
         self.group = group
+        assert transport
+        self.transport = transport
+        self.as_dict = as_dict
 
     def __call__(self):
-        payload = _prep_env(self.envelope)
-        if self.group:
-            async_to_sync(channel_layer.group_send)(self.channel_name, payload)
+        async_to_sync(self.async_send)()
+
+    async def async_send(self):
+        if self.as_dict:
+            payload = self.envelope.as_dict_transport(self.transport)
         else:
-            async_to_sync(channel_layer.send)(self.channel_name, payload)
+            payload = self.envelope.as_text_transport(self.transport)
+        if self.group:
+            await channel_layer.group_send(self.channel_name, payload)
+        else:
+            await channel_layer.send(self.channel_name, payload)
 
 
 def websocket_send(
@@ -127,7 +143,9 @@ def websocket_send(
     envelope = OutgoingWebsocketEnvelope.pack(message)
     if state:
         envelope.data.s = state
-    sender = WSSender(envelope, channel_name, group=group)
+    sender = SenderUtil(
+        envelope, channel_name, group=group, transport=WS_SEND_TRANSPORT
+    )
     if on_commit:
         # FIXME: Option to disable commit?
         # if on_commit and not self.is_on_commit_disabled:
@@ -147,7 +165,9 @@ def websocket_send_error(error: ErrorMessage, channel_name: str, group: bool = F
 
     ErrorEnvelope.is_compatible(error, exception=True)
     envelope = ErrorEnvelope.pack(error)
-    sender = WSSender(envelope, channel_name, group=group)
+    sender = SenderUtil(
+        envelope, channel_name, group=group, transport=WS_SEND_ERROR_TRANSPORT
+    )
     sender()
 
 

@@ -7,9 +7,11 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
 
+from envelope import DEFAULT_CHANNEL_REGISTRY
 from envelope import DEFAULT_ERRORS
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
+from envelope.channels import PubSubChannel
 
 if TYPE_CHECKING:
     from envelope.handlers.base import AsyncHandler
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
 
 global_message_registry = {}
 global_handler_registry = {}
+global_channel_registry = {}
 
 
 class Registry(UserDict, ABC):
@@ -41,6 +44,9 @@ class Registry(UserDict, ABC):
         ...
 
     def add(self, klass):
+        """
+        Convenience method since key should always be from name
+        """
         self[klass.name] = klass
 
     def __setitem__(self, name, klass):
@@ -49,6 +55,12 @@ class Registry(UserDict, ABC):
         type = self.get_type()
         if type:
             assert issubclass(klass, type)
+        abs_methods = getattr(klass, "__abstractmethods__", None)
+        if abs_methods:
+            missing = "', '".join(abs_methods)
+            raise TypeError(
+                f"{klass} doesn't implement the required abstract methods: '{missing}'"
+            )
         klass.registries().add(self.name)
         super().__setitem__(name, klass)
 
@@ -83,9 +95,25 @@ class HandlerRegistry(Registry):
         return result
 
 
+class ChannelRegistry(Registry):
+    """
+    This stores channel types the system should be aware of.
+    It's up to the developer to decide if a channel should be registered or not.
+    """
+
+    global_registry = global_channel_registry
+    data: Dict[str, Type[PubSubChannel]]
+
+    def get_type(self) -> Optional[Type]:
+        from envelope.channels import PubSubChannel
+
+        return PubSubChannel
+
+
 ws_incoming_messages = MessageRegistry(WS_INCOMING)
 ws_outgoing_messages = MessageRegistry(WS_OUTGOING)
 default_error_messages = MessageRegistry(DEFAULT_ERRORS)
+default_channel_registry = ChannelRegistry(DEFAULT_CHANNEL_REGISTRY)
 
 ws_incoming_handlers = HandlerRegistry(WS_INCOMING)
 ws_outgoing_handlers = HandlerRegistry(WS_OUTGOING)

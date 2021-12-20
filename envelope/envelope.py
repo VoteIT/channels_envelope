@@ -85,6 +85,14 @@ class Envelope(ABC):
             kwargs["p"] = message.data
         return cls(**kwargs)
 
+    def as_text_transport(self, channels_type: str) -> dict:
+        return {"text_data": self.data.json(), "type": channels_type}
+
+    def as_dict_transport(self, channels_type: str):
+        data = self.data.dict()
+        data["type"] = channels_type
+        return data
+
     @property
     @abstractmethod
     def schema(self) -> Type[BaseModel]:

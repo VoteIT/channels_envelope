@@ -5,9 +5,12 @@ from django.conf import settings
 WS_INCOMING = "ws_incoming"
 WS_OUTGOING = "ws_outgoing"
 DEFAULT_ERRORS = "default_errors"
+DEFAULT_CHANNEL_REGISTRY = "default"
 # The name of the consumer function that will receive outgoing websocket messages queued from a script
 # or somewhere outside of the consumer
-WS_TRANSPORT_NAME = "websocket.send"
+WS_SEND_TRANSPORT = "websocket.send"
+WS_SEND_ERROR_TRANSPORT = "ws.error.send"
+
 
 # Note: django_rq creates jobs on import, so there's no way to override this setting during runtime
 CONNECTIONS_QUEUE = getattr(settings, "ENVELOPE_CONNECTIONS_QUEUE", "default")
@@ -27,12 +30,6 @@ class MessageStates:
     SUCCESS = "s"
     FAILED = "f"
     MESSAGE_STATES = {ACKNOWLEDGED, QUEUED, RUNNING, SUCCESS, FAILED}
-
-
-class InternalTransport(TypedDict):
-    error: bool
-    text_data: str
-    type: str
 
 
 # Common errors

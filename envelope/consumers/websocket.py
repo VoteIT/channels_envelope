@@ -11,15 +11,12 @@ from channels.exceptions import DenyConnection
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django.utils.translation import activate
 from pydantic import ValidationError
 
 from envelope.consumers.utils import get_language
-from envelope.envelope import ErrorEnvelope
-from envelope.envelope import IncomingWebsocketEnvelope
-from envelope.envelope import OutgoingWebsocketEnvelope
-from envelope import InternalTransport
 from envelope.jobs import mark_connection_action
 from envelope.jobs import signal_websocket_close
 from envelope.jobs import signal_websocket_connect
@@ -29,8 +26,9 @@ from envelope.messages.errors import ValidationErrorMsg
 from envelope.utils import get_handler_registry
 
 if TYPE_CHECKING:
-    pass
-
+    from envelope.envelope import IncomingWebsocketEnvelope
+    from envelope.envelope import OutgoingWebsocketEnvelope
+    from envelope.envelope import ErrorEnvelope
 
 logger = getLogger(__name__)
 
@@ -62,9 +60,6 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
     # which causes the async tests to fail or start in another threads async event loop.
     enable_connection_signals: bool = True
     language: Optional[str] = None
-    incoming_envelope = IncomingWebsocketEnvelope
-    outgoing_envelope = OutgoingWebsocketEnvelope
-    error_envelope = ErrorEnvelope
 
     def __init__(self, *args, enable_connection_signals=True, **kwargs):
         super().__init__(*args, **kwargs)
@@ -75,6 +70,24 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             self.connection_update_interval = timedelta(seconds=seconds)
         # Set timestamps
         self.last_job = self.last_sent = self.last_recv = now()
+
+    @cached_property
+    def incoming_envelope(self):
+        from envelope.envelope import IncomingWebsocketEnvelope
+
+        return IncomingWebsocketEnvelope
+
+    @cached_property
+    def outgoing_envelope(self):
+        from envelope.envelope import OutgoingWebsocketEnvelope
+
+        return OutgoingWebsocketEnvelope
+
+    @cached_property
+    def error_envelope(self):
+        from envelope.envelope import ErrorEnvelope
+
+        return ErrorEnvelope
 
     async def connect(self):
         self.language = get_language(self.scope)
@@ -135,7 +148,7 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         """
-        WebSocket receive
+        Websocket receive
         """
         if text_data is not None:
             try:
@@ -215,21 +228,33 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         self.last_sent = now()
         await super().send(text_data, bytes_data, close)
 
-    async def websocket_send(self, event: InternalTransport):
+    async def websocket_send(self, event: dict):
         """
-        Push data to the websocket. Any channels message with the type "websocket.send" will end up here.
+        Handle event received from channels and delegate to websocket.
+        Any channels message with the type "websocket.send" will end up here.
 
         This is meant to handle messages send from other parts of the application.
         No validation will be done unless debug mode is on.
         """
         # FIXME: Other setting?
         if settings.DEBUG:
-            if event.get("error", None):
-                env_class = self.error_envelope
-            else:
-                env_class = self.outgoing_envelope
-                self.last_error = now()
-            envelope = env_class.parse(event["text_data"])
+            envelope = self.outgoing_envelope.parse(event["text_data"])
+            msg = envelope.unpack(consumer=self)
+            msg.validate()  # Die here, application error not caused by the user
+        self.last_sent = now()
+        await self.send(text_data=event["text_data"])
+
+    async def ws_error_send(self, event: dict):
+        """
+        Handle event received from channels and delegate to websocket.
+        Any channels message with the type "ws.error.send" will end up here.
+
+        This is meant to handle messages send from other parts of the application.
+        No validation will be done unless debug mode is on.
+        """
+        if settings.DEBUG:
+            self.last_error = now()
+            envelope = self.error_envelope.parse(event["text_data"])
             msg = envelope.unpack(consumer=self)
             msg.validate()  # Die here, application error not caused by the user
         self.last_sent = now()
