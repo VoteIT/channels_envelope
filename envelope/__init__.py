@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import TypedDict, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from django.conf import settings
 
+# Registry names
 WS_INCOMING = "ws_incoming"
 WS_OUTGOING = "ws_outgoing"
 INTERNAL = "internal"
 DEFAULT_ERRORS = "default_errors"
 DEFAULT_CHANNELS = "default"
+
 # The name of the consumer function that will receive outgoing websocket messages queued from a script
 # or somewhere outside of the consumer
 WS_SEND_TRANSPORT = "websocket.send"
