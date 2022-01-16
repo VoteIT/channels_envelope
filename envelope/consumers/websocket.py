@@ -194,7 +194,7 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
                 # Very early exception, this should only happen
                 # if someone is manually mucking about or during development
                 error = ValidationErrorMsg(errors=exc.errors())
-                return self.send_ws_error(error)
+                return await self.send_ws_error(error)
             try:
                 message = env.unpack(consumer=self)
             except ErrorMessage as error:
@@ -274,10 +274,11 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         No validation will be done unless debug mode is on.
         """
         # FIXME: Other setting?
-        if settings.DEBUG:
-            envelope = self.outgoing_envelope.parse(event["text_data"])
-            msg = envelope.unpack(consumer=self)
-            msg.validate()  # Die here, application error not caused by the user
+        # if settings.DEBUG:
+        envelope = self.outgoing_envelope.parse(event["text_data"])
+        msg = envelope.unpack(consumer=self)
+        msg.validate()  # Die here, application error not caused by the user
+        await self.handle_message(msg)
         self.last_sent = now()
         await self.send(text_data=event["text_data"])
 

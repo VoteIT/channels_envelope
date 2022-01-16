@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from abc import ABC
 from typing import Set
 from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
-
-from django.utils.translation import gettext as _
+from asgiref.sync import async_to_sync
 from pydantic import BaseModel
 from pydantic import validator
 
@@ -20,29 +18,33 @@ from envelope.decorators import add_message
 from envelope.messages import AsyncRunnable
 from envelope.messages import Message
 from envelope.messages.actions import DeferredJob
-from envelope.signals import channel_left
 from envelope.signals import channel_subscribed
 from envelope.utils import AppState
 from envelope.utils import get_channel_registry
 from envelope.utils import get_error_type
+from envelope.utils import websocket_send
+from envelope.envelope import OutgoingEnvelopeSchema
+from envelope.channels import ContextChannel
 
 if TYPE_CHECKING:
-    from envelope.channels import ContextChannel
-    from envelope.envelope import OutgoingEnvelopeSchema
-
-    # from voteit.messaging.consumers import WebsocketDemuxConsumer
+    from envelope.consumers.websocket import EnvelopeWebsocketConsumer
 
 
 SUBSCRIBE = "channel.subscribe"
 LEAVE = "channel.leave"
+LIST_SUBSCRIPTIONS = "channel.list_subscriptions"
 
 SUBSCRIBED = "channel.subscribed"
 LEFT = "channel.left"
+SUBSCRIPTIONS = "channel.subscriptions"
 
 
 class ChannelSchema(BaseModel):
     pk: int
     channel_type: str
+
+    class Config:
+        frozen = True
 
     @validator("channel_type", allow_reuse=True)
     def real_channel_type(cls, v):
@@ -62,7 +64,7 @@ class ChannelSubscription(ChannelSchema):
     app_state: Optional[List[OutgoingEnvelopeSchema]]
 
 
-class BaseChannelCommand(DeferredJob, ABC):
+class ChannelCommand:
     schema = ChannelSchema
     data: ChannelSchema
     channel_registry = DEFAULT_CHANNELS
@@ -76,7 +78,7 @@ class BaseChannelCommand(DeferredJob, ABC):
 
 
 @add_message(WS_INCOMING)
-class Subscribe(BaseChannelCommand):
+class Subscribe(ChannelCommand, DeferredJob):
     name = SUBSCRIBE
 
     def get_app_state(self, channel: ContextChannel) -> Optional[list]:
@@ -93,12 +95,23 @@ class Subscribe(BaseChannelCommand):
         if app_state:
             return list(app_state)
 
+    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer):
+        channel = self.get_channel(
+            self.data.channel_type, self.data.pk, self.mm.consumer_name
+        )
+        msg = Subscribed.from_message(
+            self,
+            channel_name=channel.channel_name,
+            **self.data.dict(),
+        )
+        await consumer.send_ws_message(msg, state=self.QUEUED)
+
     def run_job(self) -> Subscribed:
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
         if channel.allow_subscribe(self.user):
-            channel.subscribe()
+            async_to_sync(channel.subscribe)()
             app_state = self.get_app_state(channel)
             msg = Subscribed.from_message(
                 self,
@@ -106,7 +119,7 @@ class Subscribe(BaseChannelCommand):
                 app_state=app_state,
                 **self.data.dict(),
             )
-            msg.send_outgoing(self.mm.consumer_name, success=True)
+            websocket_send(msg, self.mm.consumer_name, state=self.SUCCESS)
             return msg
         else:
             raise get_error_type(Error.SUBSCRIBE).from_message(
@@ -116,23 +129,33 @@ class Subscribe(BaseChannelCommand):
 
 
 @add_message(WS_INCOMING)
-class Leave(BaseChannelCommand):
+class Leave(ChannelCommand, AsyncRunnable):
     name = LEAVE
 
-    def run_job(self) -> Left:
+    async def run(self, consumer: EnvelopeWebsocketConsumer) -> Left:
         # This is without permission checks since there's no reason to go Hotel California on consumers.
+        # Users may only run leave commands on their own consumer anyway
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
-        channel.leave()
+        await channel.leave()
         msg = Left.from_message(
             self, channel_name=channel.channel_name, **self.data.dict()
         )
-        msg.send_outgoing(self.mm.consumer_name, success=True)
-        channel_left.send(
-            sender=channel.__class__, context=channel.context, user=self.user
-        )
+        await consumer.send_ws_message(msg, state=self.SUCCESS)
         return msg
+
+
+@add_message(WS_INCOMING)
+class ListSubscriptions(AsyncRunnable):
+    name = LIST_SUBSCRIPTIONS
+
+    async def run(self, consumer: EnvelopeWebsocketConsumer):
+        response = Subscriptions.from_message(
+            self, subscriptions=list(consumer.subscriptions)
+        )
+        await consumer.send_ws_message(response, state=self.SUCCESS)
+        return response
 
 
 @add_message(WS_OUTGOING)
@@ -141,7 +164,7 @@ class Subscribed(AsyncRunnable):
     schema = ChannelSubscription
     data: ChannelSubscription
 
-    async def run(self, consumer):
+    async def run(self, consumer: EnvelopeWebsocketConsumer):
         subscription = ChannelSchema(**self.data.dict())
         consumer.mark_subscribed(subscription)
 
@@ -149,15 +172,26 @@ class Subscribed(AsyncRunnable):
 @add_message(WS_OUTGOING)
 class Left(AsyncRunnable):
     name = LEFT
-    schema = ChannelSubscription
-    data: ChannelSubscription
+    schema = ChannelSchema
+    data: ChannelSchema
 
-    async def run(self, consumer):
+    async def run(self, consumer: EnvelopeWebsocketConsumer):
         consumer.mark_left(self.data)
 
 
+class SubscriptionsSchema(BaseModel):
+    subscriptions: List[ChannelSchema]
+
+
+@add_message(WS_OUTGOING)
+class Subscriptions(Message):
+    name = SUBSCRIPTIONS
+    schema = SubscriptionsSchema
+    data: SubscriptionsSchema
+
+
 class RecheckSubscriptionsSchema(BaseModel):
-    subscriptions: Set[ChannelSchema] = []
+    subscriptions: Set[ChannelSchema] = set()
     consumer_name: Optional[str]
 
 
@@ -175,7 +209,7 @@ class RecheckChannelSubscriptions(DeferredJob):
     schema = RecheckSubscriptionsSchema
     data: RecheckSubscriptionsSchema
 
-    async def pre_queue(self, consumer):
+    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer):
         self.data.consumer_name = (
             consumer.channel_name
         )  # It might be sent by someone else
@@ -185,9 +219,10 @@ class RecheckChannelSubscriptions(DeferredJob):
     def should_run(self) -> bool:
         return bool(self.data.subscriptions)
 
-    def run_job(self):
+    def run_job(self) -> List[ChannelSchema]:
         registry = get_channel_registry()
         # We don't really know if someone is subscribing due to how channels work, but we won't resubscribe
+        results = []  # The returned data is meant for unittesting and similar
         for channel_info in self.data.subscriptions:
             channel_info: ChannelSchema
             ch_class: Type[ContextChannel] = registry[channel_info.channel_type]
@@ -195,11 +230,13 @@ class RecheckChannelSubscriptions(DeferredJob):
                 continue
             ch = ch_class(channel_info.pk, consumer_channel=self.data.consumer_name)
             if not ch.allow_subscribe(self.user):
-                ch.leave()
+                async_to_sync(ch.leave)()
                 msg = Left.from_message(
                     self,
                     channel_name=ch.channel_name,
                     channel_type=channel_info.channel_type,
                     pk=channel_info.pk,
                 )
-                msg.send_outgoing(self.mm.consumer_name, success=True, on_commit=False)
+                websocket_send(msg, self.mm.consumer_name, state=self.SUCCESS)
+                results.append(channel_info)
+        return results

@@ -15,6 +15,7 @@ from pydantic import validator
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.decorators import add_message
+from envelope.messages import AsyncRunnable
 from envelope.messages.actions import DeferredJob
 from envelope.messages import Message
 from envelope.messages.common import ProgressNum
