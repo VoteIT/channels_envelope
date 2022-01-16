@@ -36,7 +36,7 @@ class AsyncRunnable(Message, ABC):
         pass
 
 
-class DeferredJob(Message, Generic[S], ABC):
+class DeferredJob(Message, ABC):
     """
     Command/query can be deferred to a job queue
     """
@@ -78,18 +78,15 @@ class ContextAction(DeferredJob, Generic[S, M], ABC):
     """
     An action performed on a specific context.
     It has a permission and a model. The schema itself must contain an attribute that will be
-    used for lookup of the context to perform the action on. (context_pk_attr)
+    used for lookup of the context to perform the action on. (context_schema_attr)
+    You can specify which keyword to use when searching by setting context_query_kw.
 
     Note that it only works as a placeholder for an action, the code itself should be constructed by
     combining it with DeferredJob and must also inherit BaseIncomingMessage or BaseOutgoingMessage
     """
 
-    @property
-    @abstractmethod
-    def context_pk_attr(self) -> str:
-        """
-        Fetch context from this attribute in the schema
-        """
+    context_schema_attr = "pk"  # Fetch context from this identifier
+    context_query_kw = "pk"  # And use this search keyword
 
     @property
     @abstractmethod
@@ -118,16 +115,16 @@ class ContextAction(DeferredJob, Generic[S, M], ABC):
     @cached_property
     def context(self) -> M:
         try:
-            pk = getattr(self.data, self.context_pk_attr)
+            value = getattr(self.data, self.context_schema_attr)
         except AttributeError:
             raise AttributeError(
-                f"{self.context_pk_attr} is not a valid schema attribute for pk lookup. Message: {self}"
+                f"{self.context_schema_attr} is not a valid schema attribute for lookup. Message: {self}"
             )
         try:
-            return self.model.objects.get(pk=pk)
+            return self.model.objects.get(**{self.context_query_kw: value})
         except self.model.DoesNotExist:
             raise get_error_type(Error.NOT_FOUND).from_message(
-                self, model=self.model, key="pk", value=pk
+                self, model=self.model, key=self.context_query_kw, value=value
             )
 
     def assert_perm(self):
@@ -135,7 +132,7 @@ class ContextAction(DeferredJob, Generic[S, M], ABC):
             raise get_error_type(Error.UNAUTHORIZED).from_message(
                 self,
                 model=self.model,
-                key="pk",
-                value=getattr(self.data, self.context_pk_attr),
+                key=self.context_query_kw,
+                value=getattr(self.data, self.context_schema_attr),
                 permission=self.permission,
             )

@@ -389,7 +389,7 @@ True
 
 
 >>> @add_message(WS_INCOMING)
-... class FetchUser(DeferredJob[FetchUserSchema]):
+... class FetchUser(DeferredJob):
 ...     name = 'user.fetch'
 ...     schema = FetchUserSchema
 ...

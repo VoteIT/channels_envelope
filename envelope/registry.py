@@ -7,10 +7,10 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
 
-from envelope import DEFAULT_CHANNEL_REGISTRY
+from envelope import DEFAULT_CHANNELS
 from envelope import DEFAULT_ERRORS
 from envelope import WS_INCOMING
-from envelope import WS_OUTGOING
+from envelope import WS_OUTGOING, INTERNAL
 from envelope.channels import PubSubChannel
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ class MessageRegistry(Registry):
     global_registry = global_message_registry
     data: Dict[str, Type[Message]]
 
-    def get_type(self) -> Optional[Type]:
+    def get_type(self):
         from envelope.messages.base import Message
 
         return Message
@@ -79,7 +79,7 @@ class HandlerRegistry(Registry):
     global_registry = global_handler_registry
     data: Dict[str, Type[AsyncHandler]]
 
-    def get_type(self) -> Optional[Type]:
+    def get_type(self):
         from envelope.handlers import AsyncHandler
 
         return AsyncHandler
@@ -104,7 +104,7 @@ class ChannelRegistry(Registry):
     global_registry = global_channel_registry
     data: Dict[str, Type[PubSubChannel]]
 
-    def get_type(self) -> Optional[Type]:
+    def get_type(self):
         from envelope.channels import PubSubChannel
 
         return PubSubChannel
@@ -112,9 +112,11 @@ class ChannelRegistry(Registry):
 
 ws_incoming_messages = MessageRegistry(WS_INCOMING)
 ws_outgoing_messages = MessageRegistry(WS_OUTGOING)
+internal_messages = MessageRegistry(INTERNAL)
 default_error_messages = MessageRegistry(DEFAULT_ERRORS)
-default_channel_registry = ChannelRegistry(DEFAULT_CHANNEL_REGISTRY)
+default_channel_registry = ChannelRegistry(DEFAULT_CHANNELS)
 
 ws_incoming_handlers = HandlerRegistry(WS_INCOMING)
 ws_outgoing_handlers = HandlerRegistry(WS_OUTGOING)
+internal_handlers = HandlerRegistry(INTERNAL)
 default_error_handlers = HandlerRegistry(DEFAULT_ERRORS)

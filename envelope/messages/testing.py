@@ -62,7 +62,7 @@ class CountSchema(BaseModel):
 
 
 @add_message(WS_INCOMING)
-class Count(DeferredJob[CountSchema]):
+class Count(DeferredJob):
     name = "testing.count"
     schema = CountSchema
 

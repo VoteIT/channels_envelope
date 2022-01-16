@@ -11,6 +11,7 @@ from envelope.registry import HandlerRegistry
 from envelope.registry import MessageRegistry
 from envelope.registry import default_error_handlers
 from envelope.registry import default_error_messages
+from envelope.registry import internal_messages
 from envelope.registry import ws_incoming_handlers
 from envelope.registry import ws_incoming_messages
 from envelope.registry import ws_outgoing_handlers
@@ -163,6 +164,13 @@ class OutgoingWebsocketEnvelope(Envelope):
     schema = OutgoingEnvelopeSchema
     data: OutgoingEnvelopeSchema
     message_registry = ws_outgoing_messages
+    handler_registry = ws_outgoing_handlers
+
+
+class InternalEnvelope(Envelope):
+    schema = EnvelopeSchema
+    data: EnvelopeSchema
+    message_registry = internal_messages
     handler_registry = ws_outgoing_handlers
 
 

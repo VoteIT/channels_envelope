@@ -67,10 +67,20 @@ class NotFoundError(ErrorMessage[NotFoundSchema]):
 
 
 class UnauthorizedSchema(NotFoundSchema):
-    permission: str
+    permission: Optional[str]
 
 
 @add_message(DEFAULT_ERRORS)
 class UnauthorizedError(ErrorMessage[UnauthorizedSchema]):
     name = Error.UNAUTHORIZED
     schema = UnauthorizedSchema
+
+
+class SubscribeSchema(BaseModel):
+    channel_name: str
+
+
+@add_message(DEFAULT_ERRORS)
+class SubscribeError(ErrorMessage[SubscribeSchema]):
+    name = Error.SUBSCRIBE
+    schema = SubscribeSchema

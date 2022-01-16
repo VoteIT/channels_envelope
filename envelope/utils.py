@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+from collections import UserList
 from datetime import datetime
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Type
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth.models import AbstractUser
 from django.db import transaction
+from django.db.models import Model
+from django.db.models import QuerySet
+from django.utils.functional import cached_property
+
+from envelope import DEFAULT_CHANNELS
+from envelope import INTERNAL_TRANSPORT
 from envelope import WS_SEND_ERROR_TRANSPORT
 from envelope import WS_SEND_TRANSPORT
 from pydantic import ValidationError
-from typing import Type
 from envelope import DEFAULT_ERRORS
 from envelope import Error
 from envelope.messages.base import ErrorMessage
@@ -24,6 +31,7 @@ if TYPE_CHECKING:
     from envelope.registry import MessageRegistry
     from envelope.registry import ChannelRegistry
     from envelope.envelope import Envelope
+
 
 channel_layer = get_channel_layer()
 
@@ -75,7 +83,7 @@ def get_handler_registry(name: str) -> HandlerRegistry:
     return global_handler_registry[name]
 
 
-def get_channel_registry(name: str) -> ChannelRegistry:
+def get_channel_registry(name: str = DEFAULT_CHANNELS) -> ChannelRegistry:
     from envelope.registry import global_channel_registry
 
     return global_channel_registry[name]
@@ -154,6 +162,42 @@ def websocket_send(
         sender()
 
 
+def internal_send(
+    message: Message,
+    channel_name: str,
+    state: Optional[str] = None,
+    on_commit: bool = True,
+    group: bool = False,
+):
+    """
+    From sync world outside of the consumer - send an internal message to a group or a specific consumer.
+    """
+    from envelope.envelope import InternalEnvelope
+
+    assert isinstance(message, Message)
+    try:
+        message.validate()
+    except ValidationError as exc:
+        # These messages will probably not get caught since they're a programming error and not due to user input
+        error = get_error_type(Error.VALIDATION).from_message(
+            message, errors=exc.errors()
+        )
+        raise error
+    InternalEnvelope.is_compatible(message, exception=True)
+    envelope = InternalEnvelope.pack(message)
+    if state:
+        envelope.data.s = state
+    sender = SenderUtil(
+        envelope, channel_name, group=group, transport=INTERNAL_TRANSPORT, as_dict=True
+    )
+    if on_commit:
+        # FIXME: Option to disable commit?
+        # if on_commit and not self.is_on_commit_disabled:
+        transaction.on_commit(sender)
+    else:
+        sender()
+
+
 def websocket_send_error(error: ErrorMessage, channel_name: str, group: bool = False):
     """
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
@@ -183,3 +227,50 @@ def get_error_type(
     klass = reg[error_name]
     assert issubclass(klass, ErrorMessage)
     return klass
+
+
+class AppState(UserList):
+    """
+    Attach several messages to a subscribed response. It's built for websocket application states.
+    """
+
+    @cached_property
+    def envelope(self):
+        from envelope.envelope import OutgoingWebsocketEnvelope
+
+        return OutgoingWebsocketEnvelope
+
+    def append(self, item: Message) -> None:
+        """Insert outgoing message into envelope 👅"""
+        self.envelope.is_compatible(item, exception=True)
+
+        super().append(
+            self.envelope(
+                t=item.name,
+                p=item.data,
+            )
+        )
+
+    def append_from(
+        self,
+        instance: Model,
+        serializer_class,  #: Type[ModelSerializer],
+        message_class: Type[Message],
+    ):
+        """
+        Insert outgoing message from instance, using DRF serializer and message_class
+        """
+        data = serializer_class(instance).data
+        self.append(message_class(**data))
+
+    def append_from_queryset(
+        self,
+        queryset: QuerySet,
+        serializer_class,  #: Type[ModelSerializer],
+        message_class: Type[Message],
+    ):
+        """
+        Insert outgoing messages from queryset, using DRF serializer and message class
+        """
+        for instance in queryset:
+            self.append_from(instance, serializer_class, message_class)

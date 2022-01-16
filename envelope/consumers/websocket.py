@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Set
 from datetime import datetime
 from datetime import timedelta
 from logging import getLogger
@@ -11,7 +12,8 @@ from channels.exceptions import DenyConnection
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
-from django.utils.functional import cached_property
+
+# from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django.utils.translation import activate
 from pydantic import ValidationError
@@ -26,9 +28,8 @@ from envelope.messages.errors import ValidationErrorMsg
 from envelope.utils import get_handler_registry
 
 if TYPE_CHECKING:
-    from envelope.envelope import IncomingWebsocketEnvelope
-    from envelope.envelope import OutgoingWebsocketEnvelope
-    from envelope.envelope import ErrorEnvelope
+    from envelope.messages.channels import ChannelSchema
+
 
 logger = getLogger(__name__)
 
@@ -47,56 +48,79 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
     message_errors: int = 0
     # Last sent, received
     last_sent: datetime = None
-    last_recv: datetime = None
+    last_received: datetime = None
     last_error: Optional[datetime] = None
     # Last time we sent something to a queue which will update this consumers
     # connection status within the db. See models.Connection
     last_job: Optional[datetime] = None
     # Number of seconds to wait before despatching a connection update job.
     connection_update_interval: Optional[timedelta] = None
-    # protected_subscriptions: Dict[str, ChannelSubscription]
+    subscriptions: Set[ChannelSchema]
     # Send and queue connection signals?
     # They're a bad idea in most unit tests since they muck about with threading and db-access,
     # which causes the async tests to fail or start in another threads async event loop.
-    enable_connection_signals: bool = True
     language: Optional[str] = None
+    # Connection signals - deferred to job so we can use sync code
+    enable_connection_signals: bool = True
+    connect_signal_job = None
+    close_signal_job = None
 
-    def __init__(self, *args, enable_connection_signals=True, **kwargs):
+    def __init__(
+        self,
+        *args,
+        enable_connection_signals=True,
+        connect_signal_job=signal_websocket_connect,
+        close_signal_job=signal_websocket_close,
+        incoming_envelope=None,
+        outgoing_envelope=None,
+        error_envelope=None,
+        internal_envelope=None,
+        **kwargs
+    ):
         super().__init__(*args, **kwargs)
-        self.protected_subscriptions = {}
-        self.enable_connection_signals = enable_connection_signals
+        self.subscriptions = set()
         seconds = getattr(settings, "ENVELOPE_CONNECTION_UPDATE_INTERVAL", 180)
         if seconds:
             self.connection_update_interval = timedelta(seconds=seconds)
+
         # Set timestamps
-        self.last_job = self.last_sent = self.last_recv = now()
+        self.last_job = self.last_sent = self.last_received = now()
 
-    @cached_property
-    def incoming_envelope(self):
-        from envelope.envelope import IncomingWebsocketEnvelope
+        # Set envelope classes
+        if incoming_envelope is None:
+            from envelope.envelope import IncomingWebsocketEnvelope
 
-        return IncomingWebsocketEnvelope
+            self.incoming_envelope = IncomingWebsocketEnvelope
+        if outgoing_envelope is None:
+            from envelope.envelope import OutgoingWebsocketEnvelope
 
-    @cached_property
-    def outgoing_envelope(self):
-        from envelope.envelope import OutgoingWebsocketEnvelope
+            self.outgoing_envelope = OutgoingWebsocketEnvelope
+        if error_envelope is None:
+            from envelope.envelope import ErrorEnvelope
 
-        return OutgoingWebsocketEnvelope
+            self.error_envelope = ErrorEnvelope
 
-    @cached_property
-    def error_envelope(self):
-        from envelope.envelope import ErrorEnvelope
+        if internal_envelope is None:
+            from envelope.envelope import InternalEnvelope
 
-        return ErrorEnvelope
+            self.internal_envelope = InternalEnvelope
+
+        # Connection signals / jobs
+        self.enable_connection_signals = enable_connection_signals
+        if connect_signal_job:
+            self.connect_signal_job = connect_signal_job
+        if close_signal_job:
+            self.close_signal_job = close_signal_job
 
     async def connect(self):
         self.language = get_language(self.scope)
         activate(self.language)  # FIXME: Safe here?
-        self.user = await self.refresh_user()
+        self.user = await self.get_user()
         if self.user is None:
             # FIXME: Allow anon connections?
             logger.debug("Invalid token, closing connection")
             raise DenyConnection()
+        self.user_pk = self.user.pk
         logger.debug("Connection for user: %s", self.user)
         await self.accept()
         logger.debug(
@@ -106,7 +130,16 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             self.language,
         )
         if self.enable_connection_signals:
-            self.dispatch_connect()
+            # The connect signal even will be fired in a worker instead,
+            # since the sync calls to db aren't great to mix with async code.
+            # Currently channels testing doesn't work very well with database_sync_to_async either since
+            # we'll have problems with new threads etc
+            return self.connect_signal_job.delay(
+                user_pk=self.user_pk,
+                consumer_name=self.channel_name,
+                language=self.language,
+                online_at=now(),
+            )
 
     async def disconnect(self, close_code):
         # https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
@@ -117,16 +150,20 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
             # We only need to signal disconnect for an actual user
             if self.enable_connection_signals:
                 self.last_job = now()  # We probably don't need to care about this :)
-                self.dispatch_close(close_code)
+                return self.close_signal_job.delay(
+                    user_pk=self.user_pk,
+                    consumer_name=self.channel_name,
+                    close_code=close_code,
+                    language=self.language,
+                    offline_at=now(),
+                )
         else:
             logger.debug("Disconnect was from anon, close code %s", close_code)
 
     # NOTE! database_sync_to_async doesn't work in tests - use mock to override
-    async def refresh_user(self) -> Optional[AbstractUser]:
+    async def get_user(self) -> Optional[AbstractUser]:
         user = await get_user(self.scope)
         if user.pk is not None:
-            self.user_pk = user.pk
-            self.user = user
             return user
 
     def get_msg_meta(self) -> dict:
@@ -165,7 +202,7 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         else:
             logger.debug("Ignoring binary data")
             return
-        self.last_recv = now()
+        self.last_received = now()
         try:
             await self.handle_message(message)
         # FIXME Other recoverable errors?
@@ -260,52 +297,21 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         self.last_sent = now()
         await self.send(text_data=event["text_data"])
 
-    # async def internal_receive(self, event: Dict):
-    #     """
-    #     Handle incoming internal messages.
-    #     Incoming messages are dicts corresponding to InternalEnvelope.
-    #     """
-    #     inc_p = event.get("p", None)
-    #     if inc_p and isinstance(inc_p, str):
-    #         event["p"] = json.loads(inc_p)
-    #     envelope = InternalEnvelope(**event)
-    #     # This may cause validation errors, but that message shouldn't exist in that case it was resent from
-    #     # backend and not from the user.
-    #     # Crash and burn is okay here...
-    #     if envelope.incoming:
-    #         message = BaseIncomingMessage.from_consumer(self, envelope)
-    #     else:
-    #         message = BaseOutgoingMessage.from_consumer(self, envelope)
-    #     await self.handle_message(message)
+    async def internal_msg(self, event: dict):
+        """
+        Handle incoming internal message
+        """
+        envelope = self.internal_envelope(self, **event)
+        msg = envelope.unpack(consumer=self)
+        # Die here, application error not caused by the user
+        msg.validate()
+        # Should we catch errors from handle message?
+        # These are internal messages so any error should be from already validated
+        # data sent by the application - i.e. our fault.
+        await self.handle_message(msg)
 
-    def dispatch_connect(self):
-        """
-        The connect signal even will be fired in a worker instead,
-        since the sync calls to db aren't great to mix with async code.
-        Currently channels testing doesn't work very well with database_sync_to_async either since
-        we'll have problems with new threads etc
-        """
-        return signal_websocket_connect.delay(
-            user_pk=self.user_pk,
-            consumer_name=self.channel_name,
-            language=self.language,
-            online_at=now(),
-        )
+    def mark_subscribed(self, subscription: ChannelSchema):
+        self.subscriptions.add(subscription)
 
-    def dispatch_close(self, close_code):
-        """
-        Ask a worker to signal instead of doing it here.
-        """
-        return signal_websocket_close.delay(
-            user_pk=self.user_pk,
-            consumer_name=self.channel_name,
-            close_code=close_code,
-            language=self.language,
-            offline_at=now(),
-        )
-
-    # def mark_subscribed(self, subscription: ChannelSubscription):
-    #     self.protected_subscriptions[subscription.channel_name] = subscription
-    #
-    # def mark_left(self, subscription: ChannelSubscription):
-    #     self.protected_subscriptions.pop(subscription.channel_name, None)
+    def mark_left(self, subscription: ChannelSchema):
+        self.subscriptions.pop(subscription, None)

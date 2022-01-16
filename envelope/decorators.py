@@ -1,4 +1,4 @@
-from envelope import DEFAULT_CHANNEL_REGISTRY
+from envelope import DEFAULT_CHANNELS
 
 
 def add_message(*namespaces):
@@ -67,10 +67,11 @@ def add_handler(*namespaces):
 
 def add_channel(*namespaces):
     """
-    Decorator to add pub/sbunchannel to a specific registry or the default one
+    Decorator to add pub/sbunchannel to a specific registry
 
     >>> from envelope.testing import testing_channels
     >>> from envelope.channels import PubSubChannel
+    >>> from envelope.utils import get_channel_registry
 
     >>> @add_channel('testing')
     ... class HelloWorld(PubSubChannel):
@@ -80,13 +81,12 @@ def add_channel(*namespaces):
 
     >>> 'hello_world' in testing_channels
     True
+
     """
+    # FIXME: Allow arg-less default
 
     def _inner(cls):
         from envelope.registry import global_channel_registry
-
-        if not namespaces:
-            namespaces.append(DEFAULT_CHANNEL_REGISTRY)
 
         for name in namespaces:
             assert name in global_channel_registry, (

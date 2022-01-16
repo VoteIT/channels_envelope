@@ -11,19 +11,18 @@ from typing import Type
 from typing import TypeVar
 from typing import Union
 
+from pydantic import BaseModel
+from django.contrib.auth import get_user_model
+from django.utils.functional import cached_property
 
 from envelope import MessageStates
 from envelope.models import Connection
-from pydantic import BaseModel
-
-from django.contrib.auth import get_user_model
-from django.utils.functional import cached_property
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 
 
-__all__ = []
+# __all__ = []
 
 
 class MessageMeta(BaseModel):

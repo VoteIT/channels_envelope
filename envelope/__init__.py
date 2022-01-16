@@ -4,13 +4,14 @@ from django.conf import settings
 
 WS_INCOMING = "ws_incoming"
 WS_OUTGOING = "ws_outgoing"
+INTERNAL = "internal"
 DEFAULT_ERRORS = "default_errors"
-DEFAULT_CHANNEL_REGISTRY = "default"
+DEFAULT_CHANNELS = "default"
 # The name of the consumer function that will receive outgoing websocket messages queued from a script
 # or somewhere outside of the consumer
 WS_SEND_TRANSPORT = "websocket.send"
 WS_SEND_ERROR_TRANSPORT = "ws.error.send"
-
+INTERNAL_TRANSPORT = "internal.msg"
 
 # Note: django_rq creates jobs on import, so there's no way to override this setting during runtime
 CONNECTIONS_QUEUE = getattr(settings, "ENVELOPE_CONNECTIONS_QUEUE", "default")
@@ -39,3 +40,4 @@ class Error:
     MSG_TYPE = "error.msg_type"
     NOT_FOUND = "error.not_found"
     UNAUTHORIZED = "error.unauthorized"
+    SUBSCRIBE = "error.subscribe"
