@@ -17,6 +17,7 @@ from django_rq import get_connection
 from pydantic import BaseModel
 from rq import SimpleWorker
 
+from envelope.testing import mk_communicator
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -31,7 +32,7 @@ _channel_layers_setting = {
 
 @override_settings(CHANNEL_LAYERS=_channel_layers_setting)
 class ConsumerTests(TestCase):
-    _connected = False
+    communicator = None
 
     @classmethod
     def setUpTestData(cls):
@@ -39,26 +40,8 @@ class ConsumerTests(TestCase):
 
     def tearDown(self):
         super().tearDown()
-        if self._connected:
+        if self.communicator is not None:
             async_to_sync(self.communicator.disconnect)()
-
-    @property
-    def _cut(self):
-        from envelope.consumers.websocket import EnvelopeWebsocketConsumer
-
-        return EnvelopeWebsocketConsumer
-
-    async def _mk_communicator(self):
-        websocket_urlpatterns = [re_path(r"testws/$", self._cut.as_asgi())]
-        application = ProtocolTypeRouter(
-            {"websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns))}
-        )
-
-        self.communicator = WebsocketCommunicator(application, "/testws/")
-        connected, subprotocol = await self.communicator.connect()
-        self._connected = True
-        assert connected
-        return self.communicator
 
     def _mk_worker(self):
         return SimpleWorker(
@@ -86,10 +69,7 @@ class ConsumerTests(TestCase):
 
         return Incoming(mm={"user_pk": self.user.pk}, username="jane")
 
-    @patch("envelope.consumers.websocket.EnvelopeWebsocketConsumer.get_user")
-    def test_connection_signal(self, mocked):
-        mocked.return_value = self.user
-
+    def test_connection_signal(self):
         from envelope.signals import client_connect
 
         @receiver(client_connect)
@@ -97,7 +77,7 @@ class ConsumerTests(TestCase):
             user.username = "hello_world"
             user.save()
 
-        communicator = async_to_sync(self._mk_communicator)()
+        communicator = async_to_sync(mk_communicator)(self.user)
 
         self.assertEqual("sockety", self.user.username)
         worker = self._mk_worker()
@@ -106,10 +86,7 @@ class ConsumerTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual("hello_world", self.user.username)
 
-    @patch("envelope.consumers.websocket.EnvelopeWebsocketConsumer.get_user")
-    def test_close_signal(self, mocked):
-        mocked.return_value = self.user
-
+    def test_close_signal(self):
         from envelope.signals import client_close
 
         @receiver(client_close)
@@ -118,8 +95,8 @@ class ConsumerTests(TestCase):
             user.save()
 
         async def run_communicator():
-            communicator = await self._mk_communicator()
-            await communicator.disconnect(code=1001)
+            self.communicator = await mk_communicator(self.user)
+            await self.communicator.disconnect(code=1001)
 
         async_to_sync(run_communicator)()
 

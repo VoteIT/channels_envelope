@@ -11,6 +11,7 @@ from django.utils.translation import gettext as _
 from pydantic import BaseModel
 from pydantic import validator
 
+from envelope import DEFAULT_CHANNELS
 from envelope import Error
 from envelope import INTERNAL
 from envelope import WS_INCOMING
@@ -64,11 +65,12 @@ class ChannelSubscription(ChannelSchema):
 class BaseChannelCommand(DeferredJob, ABC):
     schema = ChannelSchema
     data: ChannelSchema
+    channel_registry = DEFAULT_CHANNELS
 
     def get_channel(
         self, channel_type: str, pk: int, consumer_name: str
     ) -> ContextChannel:
-        cr = get_channel_registry()
+        cr = get_channel_registry(name=self.channel_registry)
         # This may cause errors right?
         return cr[channel_type](pk, consumer_name)
 
