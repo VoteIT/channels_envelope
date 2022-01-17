@@ -167,7 +167,11 @@ class ListSubscriptionsTests(TestCase):
         subs_envelope = OutgoingWebsocketEnvelope.pack(subs_msg)
         subs_envelope.data.i = "subscribed"
         await self.communicator.send_input(
-            {"type": "websocket.send", "text_data": subs_envelope.data.json()}
+            {
+                "type": "websocket.send",
+                "text_data": subs_envelope.data.json(),
+                "run_handlers": True,
+            }
         )
         response = await self.communicator.receive_json_from()
         self.assertEqual("subscribed", response["i"])

@@ -238,8 +238,8 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
     async def send_ws_error(self, error: ErrorMessage):
         self.last_error = now()
         if isinstance(error, ErrorMessage):
-            error.validate()  # Errors also need a proper payload to be recoverable by the frontend client
             self.error_envelope.is_compatible(error, exception=True)
+            await self.handle_message(error)
             envelope = self.error_envelope.pack(error)
         else:
             raise TypeError("error is not an ErrorMessage instance")
@@ -248,7 +248,7 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
     async def send_ws_message(self, message, state=None):
         if isinstance(message, Message):
             self.outgoing_envelope.is_compatible(message, exception=True)
-            message.validate()  # This is not a user error in case it goes wrong, so we shouldn't catch this
+            await self.handle_message(message)
             envelope = self.outgoing_envelope.pack(message)
         else:
             raise TypeError("message is not a Message instance")
@@ -273,12 +273,11 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         This is meant to handle messages send from other parts of the application.
         No validation will be done unless debug mode is on.
         """
-        # FIXME: Other setting?
-        # if settings.DEBUG:
-        envelope = self.outgoing_envelope.parse(event["text_data"])
-        msg = envelope.unpack(consumer=self)
-        msg.validate()  # Die here, application error not caused by the user
-        await self.handle_message(msg)
+        if event.get("run_handlers", False):
+            envelope = self.outgoing_envelope.parse(event["text_data"])
+            msg = envelope.unpack(consumer=self)
+            msg.validate()  # Die here, application error not caused by the user
+            await self.handle_message(msg)
         self.last_sent = now()
         await self.send(text_data=event["text_data"])
 
@@ -290,10 +289,11 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer):
         This is meant to handle messages send from other parts of the application.
         No validation will be done unless debug mode is on.
         """
-        if settings.DEBUG:
+        if event.get("run_handlers", False):
             envelope = self.error_envelope.parse(event["text_data"])
             msg = envelope.unpack(consumer=self)
             msg.validate()  # Die here, application error not caused by the user
+            await self.handle_message(msg)
         self.last_error = now()
         self.last_sent = now()
         await self.send(text_data=event["text_data"])

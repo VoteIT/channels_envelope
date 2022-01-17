@@ -103,13 +103,17 @@ class SenderUtil:
         group: bool = False,
         transport: str = None,
         as_dict: bool = False,
+        run_handlers: Optional[bool] = None,
     ):
         self.envelope = envelope
         self.channel_name = channel_name
         self.group = group
         assert transport
         self.transport = transport
+        # Send as dict or text?
         self.as_dict = as_dict
+        # Should the consumer run handlers?
+        self.run_handlers = run_handlers
 
     def __call__(self):
         async_to_sync(self.async_send)()
@@ -119,6 +123,8 @@ class SenderUtil:
             payload = self.envelope.as_dict_transport(self.transport)
         else:
             payload = self.envelope.as_text_transport(self.transport)
+        if self.run_handlers is not None:
+            payload["run_handlers"] = self.run_handlers
         if self.group:
             await channel_layer.group_send(self.channel_name, payload)
         else:
@@ -131,6 +137,7 @@ def websocket_send(
     state: Optional[str] = None,
     on_commit: bool = True,
     group: bool = False,
+    run_handlers=None,
 ):
     """
     From sync world outside of the websocket consumer - send a message to a group or a specific consumer.
@@ -145,14 +152,16 @@ def websocket_send(
             message, errors=exc.errors()
         )
         raise error
-        # OR send?
-        # return websocket_send_error(error, channel_name, group=group)
     OutgoingWebsocketEnvelope.is_compatible(message, exception=True)
     envelope = OutgoingWebsocketEnvelope.pack(message)
     if state:
         envelope.data.s = state
     sender = SenderUtil(
-        envelope, channel_name, group=group, transport=WS_SEND_TRANSPORT
+        envelope,
+        channel_name,
+        group=group,
+        transport=WS_SEND_TRANSPORT,
+        run_handlers=run_handlers,
     )
     if on_commit:
         # FIXME: Option to disable commit?
@@ -198,7 +207,12 @@ def internal_send(
         sender()
 
 
-def websocket_send_error(error: ErrorMessage, channel_name: str, group: bool = False):
+def websocket_send_error(
+    error: ErrorMessage,
+    channel_name: str,
+    group: bool = False,
+    run_handlers: Optional[bool] = None,
+):
     """
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
@@ -210,7 +224,11 @@ def websocket_send_error(error: ErrorMessage, channel_name: str, group: bool = F
     ErrorEnvelope.is_compatible(error, exception=True)
     envelope = ErrorEnvelope.pack(error)
     sender = SenderUtil(
-        envelope, channel_name, group=group, transport=WS_SEND_ERROR_TRANSPORT
+        envelope,
+        channel_name,
+        group=group,
+        transport=WS_SEND_ERROR_TRANSPORT,
+        run_handlers=run_handlers,
     )
     sender()
 

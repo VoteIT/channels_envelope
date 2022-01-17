@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 class PubSubChannel(ABC):
     """
     A generic publish/subscribe that works with channels groups.
-
     """
 
     consumer_channel: Optional[str]
