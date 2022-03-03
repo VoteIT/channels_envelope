@@ -1,2 +1,1 @@
 -e .[testing]
-# rq 1.8.1 due to client command changes. Fixed in 1.9+ but not released yet as of september 2021
