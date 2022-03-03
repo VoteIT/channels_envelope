@@ -1,6 +1,6 @@
 from typing import Optional
 
-from envelope.messages import Message
+from envelope.core.message import Message
 from pydantic import BaseModel
 from envelope import WS_OUTGOING
 from envelope.decorators import add_message

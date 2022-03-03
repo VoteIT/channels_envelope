@@ -14,17 +14,17 @@ from envelope import Error
 from envelope import INTERNAL
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
+from envelope.core.schemas import OutgoingEnvelopeSchema
 from envelope.decorators import add_message
-from envelope.messages import AsyncRunnable
-from envelope.messages import Message
-from envelope.messages.actions import DeferredJob
+from envelope.core.message import AsyncRunnable
+from envelope.core.message import Message
+from envelope.core.message import DeferredJob
 from envelope.signals import channel_subscribed
 from envelope.utils import AppState
 from envelope.utils import get_channel_registry
 from envelope.utils import get_error_type
 from envelope.utils import websocket_send
-from envelope.envelope import OutgoingEnvelopeSchema
-from envelope.channels import ContextChannel
+from envelope.core.channels import ContextChannel
 
 if TYPE_CHECKING:
     from envelope.consumers.websocket import EnvelopeWebsocketConsumer

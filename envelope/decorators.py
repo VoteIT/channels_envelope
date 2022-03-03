@@ -6,7 +6,7 @@ def add_message(*namespaces):
     Decorator to add messages to a specific message registry.
 
     >>> from envelope.testing import testing_messages
-    >>> from envelope.messages import Message
+    >>> from envelope.core.message import Message
 
     >>> @add_message('testing')
     ... class HelloWorld(Message):
@@ -18,7 +18,7 @@ def add_message(*namespaces):
     """
 
     def _inner(cls):
-        from envelope.registry import global_message_registry
+        from envelope.core.registry import global_message_registry
 
         for name in namespaces:
             assert name in global_message_registry, (
@@ -52,7 +52,7 @@ def add_handler(*namespaces):
     """
 
     def _inner(cls):
-        from envelope.registry import global_handler_registry
+        from envelope.core.registry import global_handler_registry
 
         for name in namespaces:
             assert name in global_handler_registry, (
@@ -70,7 +70,7 @@ def add_channel(*namespaces):
     Decorator to add pub/sbunchannel to a specific registry
 
     >>> from envelope.testing import testing_channels
-    >>> from envelope.channels import PubSubChannel
+    >>> from envelope.core.channels import PubSubChannel
     >>> from envelope.utils import get_channel_registry
 
     >>> @add_channel('testing')
@@ -86,7 +86,7 @@ def add_channel(*namespaces):
     # FIXME: Allow arg-less default
 
     def _inner(cls):
-        from envelope.registry import global_channel_registry
+        from envelope.core.registry import global_channel_registry
 
         for name in namespaces:
             assert name in global_channel_registry, (

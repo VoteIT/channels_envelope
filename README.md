@@ -128,7 +128,7 @@ For this demonstration simply incoming and outgoing.
 
 ``` python
 
->>> from envelope.registry import MessageRegistry, HandlerRegistry
+>>> from envelope.registries import MessageRegistry, HandlerRegistry
 
 >>> incoming_messages = MessageRegistry('incoming')
 >>> incoming_handlers = HandlerRegistry('incoming')
@@ -183,8 +183,8 @@ that should be run by the consumer.
 
 ``` python
 
->>> from envelope.messages import Message
->>> from envelope.messages import AsyncRunnable
+>>> from envelope.core.message import Message
+>>> from envelope.core.message import AsyncRunnable
 >>> from envelope.decorators import add_message
 >>> from envelope.utils import websocket_send
 >>> from pydantic import BaseModel
@@ -260,8 +260,8 @@ to reinvent the request/response pattern.
 
 # Payload will be the package a websocket comsumer receives
 
->>> from envelope.consumers.websocket import EnvelopeWebsocketConsumer
->>> consumer = EnvelopeWebsocketConsumer(enable_connection_signals=False)
+>>> from envelope.consumers.websocket import WebsocketConsumer
+>>> consumer = WebsocketConsumer(enable_connection_signals=False)
 >>> consumer.channel_name = 'abc'  # This will be set by channels during normal operation
 
 # We'll replace the outgoing and incoming default message registries
@@ -379,7 +379,7 @@ this is just documentation :)
 >>> isinstance(jane_doe, User)
 True
 
->>> from envelope.messages.actions import DeferredJob
+>>> from envelope.core.message import DeferredJob
 >>> from envelope.utils import websocket_send
 >>> from envelope import WS_INCOMING, WS_OUTGOING
 
@@ -455,7 +455,7 @@ so let's just add a superuser to test against.
 
 
 >>> from typing import Optional
->>> from envelope.messages.actions import ContextAction
+>>> from envelope.core.message import ContextAction
 
 >>> class UpdateUserSchema(BaseModel):
 ...     pk: int

@@ -9,10 +9,9 @@ from django.utils.timezone import now
 from django.utils.translation import activate
 from django_rq import job
 
-from envelope import CONNECTIONS_QUEUE
 from envelope.envelope import IncomingWebsocketEnvelope
 from envelope.handlers.deferred_job import DeferredJob
-from envelope.messages import ErrorMessage
+from envelope.core.message import ErrorMessage
 from envelope.models import Connection
 from envelope.signals import client_close
 from envelope.signals import client_connect
@@ -37,7 +36,7 @@ def _set_lang(lang=None):
     activate(lang)
 
 
-@job(CONNECTIONS_QUEUE)
+# @job("default")
 def signal_websocket_connect(
     user_pk: int = None,
     consumer_name: str = "",
@@ -68,7 +67,7 @@ def signal_websocket_connect(
     )
 
 
-@job(CONNECTIONS_QUEUE)
+# @job(CONNECTIONS_QUEUE)
 def signal_websocket_close(
     user_pk: int = None,
     consumer_name: str = "",
@@ -100,7 +99,7 @@ def signal_websocket_close(
     )
 
 
-@job(CONNECTIONS_QUEUE)
+# @job(CONNECTIONS_QUEUE)
 def mark_connection_action(
     consumer_name: str = "",
     action_at: datetime = None,
@@ -110,7 +109,7 @@ def mark_connection_action(
     conn.save()
 
 
-@job("default")
+# @job("default")
 def default_incoming_websocket(
     t: str, data: dict, mm: dict, enqueued_at: datetime = None
 ):

@@ -1,5 +1,5 @@
 from envelope import DEFAULT_CHANNELS
-from envelope.channels import PubSubChannel
+from envelope.core.channels import PubSubChannel
 from envelope.decorators import add_channel
 
 

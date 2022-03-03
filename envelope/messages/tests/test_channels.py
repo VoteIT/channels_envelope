@@ -210,11 +210,11 @@ class RecheckChannelSubscriptionsTests(TestCase):
         return RecheckChannelSubscriptions(mm={"user_pk": self.user_one.pk}, **kwargs)
 
     async def test_recheck_channel_subscriptions_pre_queue(self):
-        from envelope.consumers.websocket import EnvelopeWebsocketConsumer
+        from envelope.consumers.websocket import WebsocketConsumer
         from envelope.messages.channels import ChannelSchema
 
         channel_subscription = ChannelSchema(pk=self.user_one.pk, channel_type="user")
-        consumer = EnvelopeWebsocketConsumer()
+        consumer = WebsocketConsumer()
         consumer.mark_subscribed(channel_subscription)
         consumer.channel_name = "abc"
 

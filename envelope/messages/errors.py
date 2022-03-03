@@ -1,14 +1,14 @@
+from typing import List
 from typing import Optional
 
 from django.db.models import Model
+from pydantic import BaseModel
+from pydantic import validator
+
 from envelope import DEFAULT_ERRORS
 from envelope import Error
+from envelope.core.message import ErrorMessage
 from envelope.decorators import add_message
-from envelope.messages import ErrorMessage
-from pydantic import BaseModel
-from typing import List
-
-from pydantic import validator
 
 
 class ErrorSchema(BaseModel):

@@ -13,27 +13,40 @@ from django.db import transaction
 from django.db.models import Model
 from django.db.models import QuerySet
 from django.utils.functional import cached_property
+from pydantic import ValidationError
 
 from envelope import DEFAULT_CHANNELS
+from envelope import DEFAULT_ERRORS
+from envelope import Error
 from envelope import INTERNAL_TRANSPORT
 from envelope import WS_SEND_ERROR_TRANSPORT
 from envelope import WS_SEND_TRANSPORT
-from pydantic import ValidationError
-from envelope import DEFAULT_ERRORS
-from envelope import Error
-from envelope.messages.base import ErrorMessage
-from envelope.messages.base import Message
 from envelope.models import Connection
 from envelope.signals import connection_terminated
 
 if TYPE_CHECKING:
-    from envelope.registry import HandlerRegistry
-    from envelope.registry import MessageRegistry
-    from envelope.registry import ChannelRegistry
-    from envelope.envelope import Envelope
-
+    from envelope.core.registry import HandlerRegistry
+    from envelope.core.registry import MessageRegistry
+    from envelope.core.registry import ChannelRegistry
+    from envelope.core.envelope import Envelope
+    from envelope.core.message import Message
+    from envelope.core.message import ErrorMessage
 
 channel_layer = get_channel_layer()
+
+
+def get_error_message_class():
+    from envelope.core.message import ErrorMessage
+
+    # Setting?
+    return ErrorMessage
+
+
+def get_message_class():
+    from envelope.core.message import Message
+
+    # Setting
+    return Message
 
 
 def update_connection_status(
@@ -72,19 +85,19 @@ def update_connection_status(
 
 
 def get_message_registry(name: str) -> MessageRegistry:
-    from envelope.registry import global_message_registry
+    from envelope.core.registry import global_message_registry
 
     return global_message_registry[name]
 
 
 def get_handler_registry(name: str) -> HandlerRegistry:
-    from envelope.registry import global_handler_registry
+    from envelope.core.registry import global_handler_registry
 
     return global_handler_registry[name]
 
 
 def get_channel_registry(name: str = DEFAULT_CHANNELS) -> ChannelRegistry:
-    from envelope.registry import global_channel_registry
+    from envelope.core.registry import global_channel_registry
 
     return global_channel_registry[name]
 
@@ -144,7 +157,7 @@ def websocket_send(
     """
     from envelope.envelope import OutgoingWebsocketEnvelope
 
-    assert isinstance(message, Message)
+    assert isinstance(message, get_message_class())
     try:
         message.validate()
     except ValidationError as exc:
@@ -183,7 +196,7 @@ def internal_send(
     """
     from envelope.envelope import InternalEnvelope
 
-    assert isinstance(message, Message)
+    assert isinstance(message, get_message_class())
     try:
         message.validate()
     except ValidationError as exc:
@@ -219,7 +232,7 @@ def websocket_send_error(
     """
     from envelope.envelope import ErrorEnvelope
 
-    assert isinstance(error, ErrorMessage)
+    assert isinstance(error, get_error_message_class())
 
     ErrorEnvelope.is_compatible(error, exception=True)
     envelope = ErrorEnvelope.pack(error)
@@ -243,7 +256,7 @@ def get_error_type(
 ) -> Type[ErrorMessage]:
     reg = get_message_registry(_registry)
     klass = reg[error_name]
-    assert issubclass(klass, ErrorMessage)
+    assert issubclass(klass, get_error_message_class())
     return klass
 
 

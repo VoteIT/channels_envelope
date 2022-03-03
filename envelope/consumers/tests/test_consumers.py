@@ -14,7 +14,9 @@ from django.test import TestCase
 from django.test import override_settings
 from django.urls import re_path
 from django_rq import get_connection
+from fakeredis import FakeRedis
 from pydantic import BaseModel
+from rq import Queue
 from rq import SimpleWorker
 
 from envelope.testing import mk_communicator
@@ -28,6 +30,7 @@ User = get_user_model()
 _channel_layers_setting = {
     "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
 }
+redis_conn = FakeRedis()
 
 
 @override_settings(CHANNEL_LAYERS=_channel_layers_setting)
@@ -38,19 +41,25 @@ class ConsumerTests(TestCase):
     def setUpTestData(cls):
         cls.user: AbstractUser = User.objects.create(username="sockety")
 
+    def setUp(self):
+        redis_conn.flushdb()
+        # name?
+        self.queue = Queue(connection=redis_conn)
+
     def tearDown(self):
         super().tearDown()
+        redis_conn.flushdb()
         if self.communicator is not None:
             async_to_sync(self.communicator.disconnect)()
 
     def _mk_worker(self):
         return SimpleWorker(
-            queues=["default"],
-            connection=get_connection(),
+            queues=[self.queue],
+            connection=redis_conn,
         )
 
     def _mk_deferred_job(self):
-        from envelope.messages.actions import DeferredJob
+        from envelope.core.message import DeferredJob
 
         class Schema(BaseModel):
             username: str
@@ -67,7 +76,7 @@ class ConsumerTests(TestCase):
                 self.user.username = self.data.username
                 self.user.save()
 
-        return Incoming(mm={"user_pk": self.user.pk}, username="jane")
+        return Incoming(queue=self.queue, mm={"user_pk": self.user.pk}, username="jane")
 
     def test_connection_signal(self):
         from envelope.signals import client_connect
@@ -77,7 +86,7 @@ class ConsumerTests(TestCase):
             user.username = "hello_world"
             user.save()
 
-        communicator = async_to_sync(mk_communicator)(self.user)
+        communicator = async_to_sync(mk_communicator)(self.user, queue=self.queue)
 
         self.assertEqual("sockety", self.user.username)
         worker = self._mk_worker()
@@ -95,7 +104,7 @@ class ConsumerTests(TestCase):
             user.save()
 
         async def run_communicator():
-            self.communicator = await mk_communicator(self.user)
+            self.communicator = await mk_communicator(self.user, queue=self.queue)
             await self.communicator.disconnect(code=1001)
 
         async_to_sync(run_communicator)()

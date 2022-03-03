@@ -11,7 +11,7 @@ User = get_user_model()
 class ContextActionTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        from envelope.messages.actions import ContextAction
+        from envelope.core.message import ContextAction
 
         cls.user = User.objects.create(username="jane")
 

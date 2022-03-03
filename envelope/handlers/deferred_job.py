@@ -3,7 +3,7 @@ from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.decorators import add_handler
 from envelope.handlers.base import AsyncHandler
-from envelope.messages.actions import DeferredJob
+from envelope.core.message import DeferredJob
 
 
 @add_handler(WS_INCOMING, WS_OUTGOING)

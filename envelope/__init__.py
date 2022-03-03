@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from django.conf import settings
 
 # Registry names
 WS_INCOMING = "ws_incoming"
@@ -16,7 +15,6 @@ WS_SEND_ERROR_TRANSPORT = "ws.error.send"
 INTERNAL_TRANSPORT = "internal.msg"
 
 # Note: django_rq creates jobs on import, so there's no way to override this setting during runtime
-CONNECTIONS_QUEUE = getattr(settings, "ENVELOPE_CONNECTIONS_QUEUE", "default")
 
 if TYPE_CHECKING:
     from envelope.messages import ErrorMessage

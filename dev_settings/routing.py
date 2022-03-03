@@ -7,13 +7,13 @@ from django.urls import re_path
 # models.
 django_asgi_app = get_asgi_application()
 
-from envelope.consumers.websocket import EnvelopeWebsocketConsumer
+from envelope.consumers.websocket import WebsocketConsumer
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 
 
 websocket_urlpatterns = [
-    re_path(r"ws/$", EnvelopeWebsocketConsumer.as_asgi()),
+    re_path(r"ws/$", WebsocketConsumer.as_asgi()),
 ]
 
 
