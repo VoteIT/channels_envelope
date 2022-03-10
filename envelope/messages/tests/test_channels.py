@@ -1,23 +1,19 @@
 from __future__ import annotations
 
 from asgiref.sync import async_to_sync
+from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
 from django.test import TestCase
-from django.test import override_settings
+from django_rq import get_queue
 
 from envelope.messages.errors import SubscribeError
 from envelope.testing import mk_communicator
+from envelope.testing import mk_simple_worker
 
 User = get_user_model()
 
 
-_channel_layers_setting = {
-    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
-}
-
-
-@override_settings(CHANNEL_LAYERS=_channel_layers_setting)
 class SubscribeTests(TestCase):
     communicator = None
 
@@ -25,6 +21,10 @@ class SubscribeTests(TestCase):
     def setUpTestData(cls):
         cls.user_one: AbstractUser = User.objects.create(username="one")
         cls.user_two: AbstractUser = User.objects.create(username="two")
+
+    def setUp(self):
+        self.queue = get_queue()
+        self.queue.empty()
 
     def tearDown(self):
         super().tearDown()
@@ -42,6 +42,7 @@ class SubscribeTests(TestCase):
         from envelope.envelope import IncomingWebsocketEnvelope
 
         return IncomingWebsocketEnvelope.pack(msg)
+
 
     async def test_subscribe(self):
         self.communicator = await mk_communicator(self.user_one)
@@ -82,8 +83,32 @@ class SubscribeTests(TestCase):
         msg.validate()
         self.assertRaises(SubscribeError, msg.run_job)
 
+    async def test_subscribe_not_allowed_via_communicator(self):
+        msg = self._mk_msg()
+        msg.validate()
+        envelope = self._pack(msg)
+        envelope.data.i = "subs"
+        self.communicator = await mk_communicator(self.user_two, queue=self.queue)
+        await self.communicator.send_json_to(envelope.data.dict())
+        response = await self.communicator.receive_json_from()
+        self.assertEqual("channel.subscribed", response['t'])
+        self.assertEqual("q", response['s'])
+        worker = mk_simple_worker()
+        await sync_to_async(worker.work)(burst=True)
+        response = await self.communicator.receive_json_from()
+        self.assertEqual(
+            {
+                "t": "error.subscribe",
+                "p": {
+                    "channel_name": f"user_{self.user_one.pk}",
+                },
+                "i": "subs",
+                "s": "f",
+            },
+            response,
+        )
 
-@override_settings(CHANNEL_LAYERS=_channel_layers_setting)
+
 class LeaveTests(TestCase):
     communicator = None
 
@@ -131,7 +156,6 @@ class LeaveTests(TestCase):
         )
 
 
-@override_settings(CHANNEL_LAYERS=_channel_layers_setting)
 class ListSubscriptionsTests(TestCase):
     communicator = None
 
@@ -190,7 +214,6 @@ class ListSubscriptionsTests(TestCase):
         )
 
 
-@override_settings(CHANNEL_LAYERS=_channel_layers_setting)
 class RecheckChannelSubscriptionsTests(TestCase):
     communicator = None
 

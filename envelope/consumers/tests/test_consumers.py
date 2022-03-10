@@ -12,6 +12,7 @@ from django.dispatch import receiver
 from django.test import TestCase
 from django.test import override_settings
 from django.utils.timezone import now
+from django_rq import get_queue
 from fakeredis import FakeRedis
 from pydantic import BaseModel
 from rq import Queue
@@ -114,8 +115,12 @@ class ConsumerCommunicatorTests(TestCase):
 
     def tearDown(self):
         super().tearDown()
+
         if self.communicator is not None:
             async_to_sync(self.communicator.disconnect)()
+        # In case we left anything bad behind...
+        queue = get_queue()
+        queue.empty()
 
     @property
     def _cut(self):

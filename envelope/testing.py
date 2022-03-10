@@ -5,7 +5,9 @@ from channels.routing import ProtocolTypeRouter
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 from django.urls import re_path
+from django_rq import get_queue
 from rq import Queue
+from rq import SimpleWorker
 
 from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
@@ -70,3 +72,13 @@ async def mk_communicator(user=None, queue: Queue = None):
         connected, subprotocol = await communicator.connect()
         assert connected  # This won't happen
     return communicator
+
+
+def mk_simple_worker(queue="default") -> SimpleWorker:
+    if isinstance(queue, str):
+        queue = get_queue(queue)
+
+    return SimpleWorker(
+        queues=[queue],
+        connection=queue.connection
+    )

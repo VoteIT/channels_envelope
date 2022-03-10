@@ -102,6 +102,7 @@ class Subscribe(ChannelCommand, DeferredJob):
         msg = Subscribed.from_message(
             self,
             channel_name=channel.channel_name,
+            _registry=WS_OUTGOING,
             **self.data.dict(),
         )
         await consumer.send_ws_message(msg, state=self.QUEUED)
@@ -116,6 +117,7 @@ class Subscribe(ChannelCommand, DeferredJob):
             msg = Subscribed.from_message(
                 self,
                 channel_name=channel.channel_name,
+                _registry=WS_OUTGOING,
                 app_state=app_state,
                 **self.data.dict(),
             )

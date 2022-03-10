@@ -30,12 +30,12 @@ if not settings.DEBUG:
     )
 
 
-@receiver(client_connect)
-def say_hello_at_connect(user, consumer_name, **kw):
-    print("Active language in automatic greeting: ", translation.get_language())
-    greeting = _("Hello %(username)s!") % {"username": user.username}
-    msg = Pleasantry(greeting=greeting)
-    websocket_send(msg, consumer_name, on_commit=False)
+# @receiver(client_connect)
+# def say_hello_at_connect(user, consumer_name, **kw):
+#     print("Active language in automatic greeting: ", translation.get_language())
+#     greeting = _("Hello %(username)s!") % {"username": user.username}
+#     msg = Pleasantry(greeting=greeting)
+#     websocket_send(msg, consumer_name, on_commit=False)
 
 
 class PleasantrySchema(BaseModel):

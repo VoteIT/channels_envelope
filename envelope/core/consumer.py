@@ -14,7 +14,6 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.utils.timezone import now
 from django.utils.translation import activate
-from django_rq import get_queue
 from rq import Queue
 
 from envelope.messages.channels import ChannelSchema
@@ -146,12 +145,8 @@ class BaseWebsocketConsumer(AsyncWebsocketConsumer, ABC):
         """
         activate(self.language)  # FIXME: Every time...?
         message.validate()
-        if message.mm.registry:
-            # We'll probably want to die on key erorr here since it's a programming mistake
-            reg = get_handler_registry(message.mm.registry)
-            await reg.apply(message, consumer=self)
-        else:
-            self.logger.debug("%s has no mm.registry value, won't handle" % message)
+        reg = get_handler_registry(message.mm.registry)
+        await reg.apply(message, consumer=self)
 
     async def send(self, text_data=None, bytes_data=None, envelope=None, close=False):
         if bool(text_data) == bool(envelope):

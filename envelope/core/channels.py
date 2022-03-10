@@ -66,10 +66,6 @@ class PubSubChannel(ABC):
     def registries(cls) -> Set:
         return cls.__registries
 
-    @classmethod
-    def from_consumer(cls, consumer):
-        return cls(consumer_channel=consumer.channel_name)
-
     async def subscribe(self):
         assert self.consumer_channel
         await self.channel_layer.group_add(self.channel_name, self.consumer_channel)

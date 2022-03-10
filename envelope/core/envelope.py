@@ -14,7 +14,7 @@ from typing import Type
 
 
 if TYPE_CHECKING:
-    from channels.consumer import AsyncConsumer
+    from envelope.core.consumer import BaseWebsocketConsumer
     from envelope.messages import MessageMeta
     from envelope.core.message import Message
 
@@ -34,12 +34,12 @@ class Envelope(ABC):
     @classmethod
     def parse(cls, text: str):
         data = cls.schema.parse_raw(text)
-        return cls(_data=data)
+        return cls(_data=data, _registry=cls.handler_registry.name)
 
     def unpack(
         self,
         mm: Optional[MessageMeta, dict] = None,
-        consumer: Optional[AsyncConsumer] = None,
+        consumer: Optional[BaseWebsocketConsumer] = None,
         **kwargs,
     ) -> Message:
         """
@@ -50,9 +50,9 @@ class Envelope(ABC):
         if bool(mm) == bool(consumer):
             raise ValueError("Can't specify both mm and consumer")
         if consumer:
-            mm = dict(registry=self.message_registry.name, **consumer.get_msg_meta())
-        if self.data.i:
-            mm["id"] = self.data.i
+            mm = consumer.get_msg_meta()
+            if self.data.i:
+                mm["id"] = self.data.i
         try:
             msg_class = self.message_registry[self.data.t]
         except KeyError:
@@ -64,6 +64,7 @@ class Envelope(ABC):
         msg = msg_class(
             mm=mm,
             data=self.data.p,
+            _registry=self.message_registry.name,
         )
         if consumer and getattr(consumer, "user", None):
             msg.user = consumer.user

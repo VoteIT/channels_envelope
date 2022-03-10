@@ -157,6 +157,8 @@ class WebsocketConsumer(BaseWebsocketConsumer):
     async def send_ws_error(self, error: ErrorMessage):
         self.last_error = now()
         if isinstance(error, ErrorMessage):
+            if error.mm.registry != self.error_envelope.message_registry.name:
+                error.mm.registry = self.error_envelope.message_registry.name
             self.error_envelope.is_compatible(error, exception=True)
             await self.handle_message(error)
             envelope = self.error_envelope.pack(error)
@@ -166,6 +168,8 @@ class WebsocketConsumer(BaseWebsocketConsumer):
 
     async def send_ws_message(self, message, state=None):
         if isinstance(message, Message):
+            if message.mm.registry != self.outgoing_envelope.message_registry.name:
+                message.mm.registry = self.outgoing_envelope.message_registry.name
             self.outgoing_envelope.is_compatible(message, exception=True)
             await self.handle_message(message)
             envelope = self.outgoing_envelope.pack(message)
