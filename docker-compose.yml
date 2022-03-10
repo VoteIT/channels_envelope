@@ -6,11 +6,11 @@ services:
     volumes:
       - ./volumes/redis:/data
     ports:
-      - "6379:6379"
+      - "16379:6379"
   rqdash:
     image: eoranged/rq-dashboard
     environment:
-      RQ_DASHBOARD_REDIS_URL: redis://redis:6379/1
+      RQ_DASHBOARD_REDIS_URL: redis://redis:16379/9
       RQ_DASHBOARD_USERNAME: rq
       RQ_DASHBOARD_PASSWORD: rq
     ports:

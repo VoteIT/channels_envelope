@@ -78,8 +78,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": ["redis://127.0.0.1:6379/10"],
-            # "hosts": [("localhost", 6379)],
+            "hosts": ["redis://127.0.0.1:16379/10"],
         },
     },
 }
@@ -101,14 +100,14 @@ DATABASES = {
 RQ_QUEUES = {
     "default": {
         "HOST": "localhost",
-        "PORT": 6379,
-        "DB": 1,
+        "PORT": 16379,
+        "DB": 9,
     },
-    "testing": {
-        "HOST": "localhost",
-        "PORT": 6379,
-        "DB": 5,
-    },
+    # "testing": {
+    #     "HOST": "localhost",
+    #     "PORT": 6379,
+    #     "DB": 5,
+    # },
 }
 
 
