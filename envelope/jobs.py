@@ -7,14 +7,15 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils.timezone import now
 from django.utils.translation import activate
-from django_rq import job
 
+from envelope import Error
 from envelope.envelope import IncomingWebsocketEnvelope
 from envelope.handlers.deferred_job import DeferredJob
 from envelope.core.message import ErrorMessage
 from envelope.models import Connection
 from envelope.signals import client_close
 from envelope.signals import client_connect
+from envelope.utils import get_error_type
 from envelope.utils import update_connection_status
 from envelope.utils import websocket_send_error
 
@@ -36,7 +37,25 @@ def _set_lang(lang=None):
     activate(lang)
 
 
-# @job("default")
+def handle_failure(job, connection, exc_type, exc_value, traceback):
+    """
+    Failure callbacks are functions that accept job, connection, type, value and traceback arguments.
+    type, value and traceback values returned by sys.exc_info(),
+    which is the exception raised when executing your job.
+
+    See RQs docs
+    """
+    mm = job.kwargs.get("mm", {})
+    if mm:
+        message_id = mm.get("id", None)
+        consumer_name = mm.get("consumer_name", None)
+        if message_id and consumer_name:
+            # FIXME: exc value might not be safe here
+            err = get_error_type(Error.JOB)(mm=mm, msg=str(exc_value))
+            websocket_send_error(err, consumer_name)
+            return err  # For testing, has no effect
+
+
 def signal_websocket_connect(
     user_pk: int = None,
     consumer_name: str = "",
@@ -67,7 +86,6 @@ def signal_websocket_connect(
     )
 
 
-# @job(CONNECTIONS_QUEUE)
 def signal_websocket_close(
     user_pk: int = None,
     consumer_name: str = "",
@@ -99,7 +117,6 @@ def signal_websocket_close(
     )
 
 
-# @job(CONNECTIONS_QUEUE)
 def mark_connection_action(
     consumer_name: str = "",
     action_at: datetime = None,
@@ -109,11 +126,14 @@ def mark_connection_action(
     conn.save()
 
 
-# @job("default")
 def default_incoming_websocket(
-    t: str, data: dict, mm: dict, enqueued_at: datetime = None
+    t: str,
+    data: dict,
+    mm: dict,
+    enqueued_at: datetime = None,
+    envelope=IncomingWebsocketEnvelope,  # For testing injection
 ):
-    env = IncomingWebsocketEnvelope(t=t, p=data)
+    env = envelope(t=t, p=data)
     msg = env.unpack(mm=mm)
     run_job(msg, enqueued_at=enqueued_at)
 

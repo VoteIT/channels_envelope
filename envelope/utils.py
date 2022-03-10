@@ -233,7 +233,6 @@ def websocket_send_error(
     from envelope.envelope import ErrorEnvelope
 
     assert isinstance(error, get_error_message_class())
-
     ErrorEnvelope.is_compatible(error, exception=True)
     envelope = ErrorEnvelope.pack(error)
     sender = SenderUtil(

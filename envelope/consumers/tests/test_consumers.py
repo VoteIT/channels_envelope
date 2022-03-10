@@ -1,19 +1,17 @@
 from __future__ import annotations
 
+from datetime import timedelta
+from json import dumps
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 from unittest.mock import patch
 
 from asgiref.sync import async_to_sync
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter
-from channels.routing import URLRouter
-from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.dispatch import receiver
 from django.test import TestCase
 from django.test import override_settings
-from django.urls import re_path
-from django_rq import get_connection
+from django.utils.timezone import now
 from fakeredis import FakeRedis
 from pydantic import BaseModel
 from rq import Queue
@@ -26,15 +24,13 @@ if TYPE_CHECKING:
 
 User = get_user_model()
 
-
 _channel_layers_setting = {
     "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
 }
-redis_conn = FakeRedis()
 
 
 @override_settings(CHANNEL_LAYERS=_channel_layers_setting)
-class ConsumerTests(TestCase):
+class ConsumerUnitTests(TestCase):
     communicator = None
 
     @classmethod
@@ -42,20 +38,95 @@ class ConsumerTests(TestCase):
         cls.user: AbstractUser = User.objects.create(username="sockety")
 
     def setUp(self):
-        redis_conn.flushdb()
+        self.redis_conn = FakeRedis()
+        self.queue = Queue(connection=self.redis_conn)
+
+    @property
+    def _cut(self):
+        from envelope.consumers.websocket import WebsocketConsumer
+
+        return WebsocketConsumer
+
+    def _mk_one(self):
+        consumer=self._cut(enable_connection_signals=False)
+        consumer.last_job = now()
+        consumer.channel_name = "abc"
+        return consumer
+
+    def test_update_connection(self):
+        consumer = self._mk_one()
+        with patch.object(consumer.timestamp_queue, "enqueue") as patched_enqueue:
+            self.assertFalse(patched_enqueue.called)
+            self.assertIsNone(consumer.update_connection())
+            self.assertFalse(patched_enqueue.called)
+            consumer.last_job = now() - timedelta(minutes=4)
+            self.assertIsNotNone(consumer.update_connection())
+            self.assertTrue(patched_enqueue.called)
+
+    async def test_receive_bad_format(self):
+        consumer = self._mk_one()
+        with patch.object(consumer, "send_ws_error") as patched:
+            await consumer.receive(text_data="Buhu")
+            self.assertTrue(patched.called)
+
+    async def test_receive_bad_data(self):
+        consumer = self._mk_one()
+        consumer.base_send = AsyncMock()
+        with patch.object(consumer, "send_ws_error") as patched:
+            data = dumps({"t": "testing.count", "p": {"num": "abc"}})
+            await consumer.receive(text_data=data)
+            self.assertTrue(patched.called)
+
+    async def test_send(self):
+        from envelope.envelope import OutgoingWebsocketEnvelope
+        consumer = self._mk_one()
+        consumer.base_send = AsyncMock()
+        data = {"t": "testing.hello", "p": {"greeting": "Hello"}}
+        await consumer.send(text_data=dumps(data))
+        envelope = OutgoingWebsocketEnvelope(**data)
+        await consumer.send(envelope=envelope)
+        with self.assertRaises(ValueError):
+            await consumer.send(envelope=envelope,text_data=dumps(data))
+            await consumer.send()
+
+    def test_mark_subscribed_left(self):
+        from envelope.messages.channels import ChannelSchema
+        subs=ChannelSchema(pk=1, channel_type='user')
+        consumer = self._mk_one()
+        consumer.mark_subscribed(subs)
+        self.assertIn(subs, consumer.subscriptions)
+        consumer.mark_left(subs)
+        self.assertNotIn(subs, consumer.subscriptions)
+
+
+@override_settings(CHANNEL_LAYERS=_channel_layers_setting)
+class ConsumerCommunicatorTests(TestCase):
+    communicator = None
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user: AbstractUser = User.objects.create(username="sockety")
+
+    def setUp(self):
+        self.redis_conn = FakeRedis()
         # name?
-        self.queue = Queue(connection=redis_conn)
+        self.queue = Queue(connection=self.redis_conn)
 
     def tearDown(self):
         super().tearDown()
-        redis_conn.flushdb()
         if self.communicator is not None:
             async_to_sync(self.communicator.disconnect)()
+
+    @property
+    def _cut(self):
+        from envelope.consumers.websocket import WebsocketConsumer
+
+        return WebsocketConsumer
 
     def _mk_worker(self):
         return SimpleWorker(
             queues=[self.queue],
-            connection=redis_conn,
+            connection=self.redis_conn,
         )
 
     def _mk_deferred_job(self):
@@ -86,7 +157,7 @@ class ConsumerTests(TestCase):
             user.username = "hello_world"
             user.save()
 
-        communicator = async_to_sync(mk_communicator)(self.user, queue=self.queue)
+        async_to_sync(mk_communicator)(self.user, queue=self.queue)
 
         self.assertEqual("sockety", self.user.username)
         worker = self._mk_worker()
@@ -115,3 +186,7 @@ class ConsumerTests(TestCase):
         self.assertTrue(completed)
         self.user.refresh_from_db()
         self.assertEqual("closed_1001", self.user.username)
+
+    async def test_connection_anon_user(self):
+        with self.assertRaises(AssertionError):
+            await mk_communicator(queue=self.queue)

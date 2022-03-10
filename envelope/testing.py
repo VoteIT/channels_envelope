@@ -7,18 +7,24 @@ from channels.testing import WebsocketCommunicator
 from django.urls import re_path
 from rq import Queue
 
-from envelope.decorators import add_message
-
+from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
 from envelope.core.message import Message
-from envelope.core.registry import MessageRegistry
-from envelope.core.registry import HandlerRegistry
 from envelope.core.registry import ChannelRegistry
-
+from envelope.core.registry import HandlerRegistry
+from envelope.core.registry import MessageRegistry
+from envelope.core.schemas import EnvelopeSchema
+from envelope.decorators import add_message
 
 testing_messages = MessageRegistry("testing")
 testing_handlers = HandlerRegistry("testing")
 testing_channels = ChannelRegistry("testing")
+
+
+class TestingEnvelope(Envelope):
+    message_registry = testing_messages
+    handler_registry = testing_handlers
+    schema = EnvelopeSchema
 
 
 @add_message("testing")
@@ -34,7 +40,9 @@ class WebsocketWorld(Message):
     name = "testing.world"
 
 
-async def mk_communicator(user, queue: Queue = None):
+
+
+async def mk_communicator(user=None, queue: Queue = None):
     """
     A logged in user is required for this consumer.
     But async/sync doesn't mix well so we'll patch the user
@@ -54,7 +62,11 @@ async def mk_communicator(user, queue: Queue = None):
         {"websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns))}
     )
     communicator = WebsocketCommunicator(application, "/testws/")
-    with patch.object(WebsocketConsumer, "get_user", return_value=user):
+    if user:
+        with patch.object(WebsocketConsumer, "get_user", return_value=user):
+            connected, subprotocol = await communicator.connect()
+            assert connected
+    else:
         connected, subprotocol = await communicator.connect()
-        assert connected
+        assert connected  # This won't happen
     return communicator

@@ -41,3 +41,4 @@ class Error:
     NOT_FOUND = "error.not_found"
     UNAUTHORIZED = "error.unauthorized"
     SUBSCRIBE = "error.subscribe"
+    JOB = "error.job"

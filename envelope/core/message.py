@@ -25,6 +25,7 @@ from envelope.core.schemas import NoPayload
 from envelope.models import Connection
 from envelope.queues import DEFAULT_QUEUE_NAME
 from envelope.utils import get_error_type
+from envelope.utils import websocket_send_error
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -158,6 +159,11 @@ class DeferredJob(Message, ABC):
     Command/query can be deferred to a job queue
     """
 
+    # Related to RQ
+    ttl = 20
+    job_timeout = 20
+    queue: str = DEFAULT_QUEUE_NAME  # Queue name
+
     # job_timeout = 7
     # autocommit = True
     # is_async = True
@@ -167,7 +173,6 @@ class DeferredJob(Message, ABC):
     mm: MessageMeta
     data: BaseModel  # But really the schema
     should_run: bool = True  # Mark as false to abort run
-    queue: str = DEFAULT_QUEUE_NAME  # Queue name
 
     def __init__(self, queue: Union[str, Queue] = None, **kwargs):
         if queue is not None:
@@ -196,18 +201,29 @@ class DeferredJob(Message, ABC):
 
         return default_incoming_websocket
 
-    def enqueue(self):
-        return self.rq_queue.enqueue(
+    def enqueue(self, **kwargs):
+        from envelope.jobs import handle_failure
+
+        data = {}
+        if self.data:
+            data = self.data.dict()
+        kwargs.setdefault("on_failure", handle_failure)
+        self.rq_queue.enqueue(
             self.job,
             t=self.name,
             mm=self.mm.dict(),
-            data=self.data.dict(),
+            data=data,
             enqueued_at=now(),
+            job_timeout=self.job_timeout,
+            ttl=self.ttl,
+            **kwargs,
         )
 
     @abstractmethod
     def run_job(self):
-        """Run this within the worker to do the actual job"""
+        """
+        Run this within the worker to do the actual job
+        """
         pass
 
 

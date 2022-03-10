@@ -23,7 +23,7 @@ from envelope.queues import get_timestamp_queue
 from envelope.utils import get_handler_registry
 
 
-class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer, ABC):
+class BaseWebsocketConsumer(AsyncWebsocketConsumer, ABC):
 
     # User model, don't trust this since it will be wiped during logout procedure.
     user: Optional[AbstractUser] = None
@@ -89,19 +89,19 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer, ABC):
         self.enable_connection_signals = enable_connection_signals
         if connect_signal_job:
             self.connect_signal_job = connect_signal_job
-        else:
+        else:  # pragma: no cover
             if enable_connection_signals:
                 raise ValueError(
                     "Consumer has 'enable_connection_signals' without specifying 'connect_signal_job'"
                 )
         if close_signal_job:
             self.close_signal_job = close_signal_job
-        else:
+        else:  # pragma: no cover
             if enable_connection_signals:
                 raise ValueError(
                     "Consumer has 'enable_connection_signals' without specifying 'close_signal_job'"
                 )
-        if logger:
+        if logger:  # pragma: no cover
             self.logger = logger
 
         self.connection_queue = get_connection_queue(connection_queue)
@@ -147,14 +147,8 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer, ABC):
         activate(self.language)  # FIXME: Every time...?
         message.validate()
         if message.mm.registry:
-            try:
-                reg = get_handler_registry(message.mm.registry)
-            except KeyError:
-                self.logger.debug(
-                    "No handler registry called %s, won't handle %s"
-                    % (message.mm.registry, message)
-                )
-                return
+            # We'll probably want to die on key erorr here since it's a programming mistake
+            reg = get_handler_registry(message.mm.registry)
             await reg.apply(message, consumer=self)
         else:
             self.logger.debug("%s has no mm.registry value, won't handle" % message)
@@ -168,8 +162,10 @@ class EnvelopeWebsocketConsumer(AsyncWebsocketConsumer, ABC):
         await super().send(text_data, bytes_data, close)
 
     def mark_subscribed(self, subscription: ChannelSchema):
+        assert isinstance(subscription, ChannelSchema)
         self.subscriptions.add(subscription)
 
     def mark_left(self, subscription: ChannelSchema):
+        assert isinstance(subscription, ChannelSchema)
         if subscription in self.subscriptions:
             self.subscriptions.remove(subscription)

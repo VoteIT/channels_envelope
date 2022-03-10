@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from envelope.core.message import ErrorMessage
 from envelope.core.message import Message
 from envelope.consumers.utils import get_language
-from envelope.core.consumer import EnvelopeWebsocketConsumer
+from envelope.core.consumer import BaseWebsocketConsumer
 from envelope.jobs import mark_connection_action
 from envelope.jobs import signal_websocket_close
 from envelope.jobs import signal_websocket_connect
@@ -22,7 +22,7 @@ logger = getLogger(__name__)
 __all__ = ("WebsocketConsumer",)
 
 
-class WebsocketConsumer(EnvelopeWebsocketConsumer):
+class WebsocketConsumer(BaseWebsocketConsumer):
     logger = logger
 
     def __init__(
@@ -68,7 +68,7 @@ class WebsocketConsumer(EnvelopeWebsocketConsumer):
         self.user = await self.get_user()
         if self.user is None:
             # FIXME: Allow anon connections?
-            logger.debug("Invalid token, closing connection")
+            logger.debug("No user found closing connection")
             raise DenyConnection()
         self.user_pk = self.user.pk
         logger.debug("Connection for user: %s", self.user)
@@ -115,7 +115,7 @@ class WebsocketConsumer(EnvelopeWebsocketConsumer):
     def update_connection(self):
         if self.connection_update_interval is not None:
             if now() - self.last_job > self.connection_update_interval:
-                self.timestamp_queue.enqueue(
+                return self.timestamp_queue.enqueue(
                     mark_connection_action,
                     action_at=now(),
                     consumer_name=self.channel_name,
@@ -137,7 +137,7 @@ class WebsocketConsumer(EnvelopeWebsocketConsumer):
                 message = env.unpack(consumer=self)
             except ErrorMessage as error:
                 return await self.send_ws_error(error)
-        else:
+        else:  # pragma: no cover
             logger.debug("Ignoring binary data")
             return
         self.last_received = now()

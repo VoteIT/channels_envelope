@@ -22,7 +22,7 @@ from envelope.signals import client_connect
 from envelope.utils import websocket_send
 
 if TYPE_CHECKING:
-    from envelope.consumers.websocket import EnvelopeWebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 if not settings.DEBUG:
     raise ImproperlyConfigured(
@@ -66,7 +66,7 @@ class Count(DeferredJob):
     name = "testing.count"
     schema = CountSchema
 
-    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer):
+    async def pre_queue(self, consumer: WebsocketConsumer):
         msg = ProgressNum.from_message(
             self,
             curr=0,

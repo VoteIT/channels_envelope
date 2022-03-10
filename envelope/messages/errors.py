@@ -84,3 +84,13 @@ class SubscribeSchema(BaseModel):
 class SubscribeError(ErrorMessage[SubscribeSchema]):
     name = Error.SUBSCRIBE
     schema = SubscribeSchema
+
+
+@add_message(DEFAULT_ERRORS)
+class JobError(GenericError):
+    """
+    A background task caused an exception/error. This is not meant for error checking, but merely to notify
+    frontend that there's no use waiting for this.
+    """
+
+    name = Error.JOB

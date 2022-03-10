@@ -16,7 +16,7 @@ from typing import Type
 if TYPE_CHECKING:
     from channels.consumer import AsyncConsumer
     from envelope.messages import MessageMeta
-    from envelope.core.base import Message
+    from envelope.core.message import Message
 
 
 class Envelope(ABC):
