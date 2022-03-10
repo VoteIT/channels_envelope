@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from envelope import INTERNAL
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.decorators import add_message
@@ -22,6 +23,6 @@ class Ping(AsyncRunnable):
             await consumer.send_ws_message(response, state=self.SUCCESS)
 
 
-@add_message(WS_INCOMING, WS_OUTGOING)
+@add_message(WS_INCOMING, WS_OUTGOING, INTERNAL)
 class Pong(Message):
     name = "s.pong"

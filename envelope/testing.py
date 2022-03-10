@@ -4,6 +4,7 @@ from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
+from django.db.transaction import get_connection
 from django.urls import re_path
 from django_rq import get_queue
 from rq import Queue
@@ -42,11 +43,9 @@ class WebsocketWorld(Message):
     name = "testing.world"
 
 
-
-
 async def mk_communicator(user=None, queue: Queue = None):
     """
-    A logged in user is required for this consumer.
+    A logged-in user is required for this consumer.
     But async/sync doesn't mix well so we'll patch the user
     """
     from envelope.consumers.websocket import WebsocketConsumer
@@ -78,7 +77,35 @@ def mk_simple_worker(queue="default") -> SimpleWorker:
     if isinstance(queue, str):
         queue = get_queue(queue)
 
-    return SimpleWorker(
-        queues=[queue],
-        connection=queue.connection
-    )
+    return SimpleWorker(queues=[queue], connection=queue.connection)
+
+
+class FakeCommit:
+    """
+    A very destructive context manager that will wreak havoc if you use it outside unittests!
+    So don't!
+
+    So why does it exist?
+    Most unittests start with mock data that's part of the tests own transaction.
+    So if we want to test on_commit hooks, it becomes very problematic since that initial test data may
+    have caused commit hooks - and theres no way we can start a new atomic transaction
+    within a regular unittest. (It does work with TransactionTestCase but that's painfully slow)
+    """
+
+    def __enter__(self):
+        """
+        Remove staged all on_commit methods on enter - yes this will destroy them for the
+        atomic block that's active!
+        """
+        self.connection = get_connection()
+        self.connection.run_on_commit = []
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Execute all on_commit hooks and cleanup.
+        """
+        current_run_on_commit = self.connection.run_on_commit
+        self.connection.run_on_commit = []
+        while current_run_on_commit:
+            sids, func = current_run_on_commit.pop(0)
+            func()

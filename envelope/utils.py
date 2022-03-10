@@ -153,7 +153,31 @@ def websocket_send(
     run_handlers=None,
 ):
     """
-    From sync world outside of the websocket consumer - send a message to a group or a specific consumer.
+    From sync world outside the websocket consumer - send a message to a group or a specific consumer.
+
+    >>> from envelope.messages.ping import Pong
+    >>> from unittest import mock
+    >>> msg = Pong(mm={'consumer_name': 'abc'})
+
+    This method can send straight away regardless of transactions
+    >>> with mock.patch.object(channel_layer, 'send') as mock_send:
+    ...     websocket_send(msg, 'a-channel', on_commit=False)
+    ...     mock_send.called
+    True
+
+    It can also be used with transactional support.
+    >>> from django.db import transaction
+    >>> with mock.patch.object(channel_layer, 'send') as mock_send:
+    ...     with transaction.atomic():
+    ...         websocket_send(msg, 'a-channel')
+    ...         pre_commit_called = mock_send.called
+    ...     post_commit_called = mock_send.called
+    ...
+    >>> pre_commit_called
+    False
+    >>> post_commit_called
+    True
+
     """
     from envelope.envelope import OutgoingWebsocketEnvelope
 
@@ -192,7 +216,30 @@ def internal_send(
     group: bool = False,
 ):
     """
-    From sync world outside of the consumer - send an internal message to a group or a specific consumer.
+    From sync world outside the consumer - send an internal message to a group or a specific consumer.
+
+    >>> from envelope.messages.ping import Pong
+    >>> from unittest import mock
+    >>> msg = Pong(mm={'consumer_name': 'abc'})
+
+    This method can send straight away regardless of transactions
+    >>> with mock.patch.object(channel_layer, 'send') as mock_send:
+    ...     internal_send(msg, 'a-channel', on_commit=False)
+    ...     mock_send.called
+    True
+
+    It can also be used with transactional support.
+    >>> from django.db import transaction
+    >>> with mock.patch.object(channel_layer, 'send') as mock_send:
+    ...     with transaction.atomic():
+    ...         internal_send(msg, 'a-channel')
+    ...         pre_commit_called = mock_send.called
+    ...     post_commit_called = mock_send.called
+    ...
+    >>> pre_commit_called
+    False
+    >>> post_commit_called
+    True
     """
     from envelope.envelope import InternalEnvelope
 
