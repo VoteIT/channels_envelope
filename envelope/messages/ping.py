@@ -15,7 +15,8 @@ if TYPE_CHECKING:
 class Ping(AsyncRunnable):
     name = "s.ping"
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer):
+    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+        assert consumer
         if self.mm.registry != WS_OUTGOING:
             response = Pong.from_message(self)
             await consumer.send_ws_message(response, state=self.SUCCESS)

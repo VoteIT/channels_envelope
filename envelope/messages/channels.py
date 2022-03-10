@@ -29,7 +29,6 @@ from envelope.core.channels import ContextChannel
 if TYPE_CHECKING:
     from envelope.consumers.websocket import EnvelopeWebsocketConsumer
 
-
 SUBSCRIBE = "channel.subscribe"
 LEAVE = "channel.leave"
 LIST_SUBSCRIPTIONS = "channel.list_subscriptions"
@@ -136,9 +135,10 @@ class Subscribe(ChannelCommand, DeferredJob):
 class Leave(ChannelCommand, AsyncRunnable):
     name = LEAVE
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer) -> Left:
+    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs) -> Left:
         # This is without permission checks since there's no reason to go Hotel California on consumers.
         # Users may only run leave commands on their own consumer anyway
+        assert consumer
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
@@ -154,7 +154,8 @@ class Leave(ChannelCommand, AsyncRunnable):
 class ListSubscriptions(AsyncRunnable):
     name = LIST_SUBSCRIPTIONS
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer):
+    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+        assert consumer
         response = Subscriptions.from_message(
             self, subscriptions=list(consumer.subscriptions)
         )
@@ -168,7 +169,8 @@ class Subscribed(AsyncRunnable):
     schema = ChannelSubscription
     data: ChannelSubscription
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer):
+    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+        assert consumer
         subscription = ChannelSchema(**self.data.dict())
         consumer.mark_subscribed(subscription)
 
@@ -179,7 +181,8 @@ class Left(AsyncRunnable):
     schema = ChannelSchema
     data: ChannelSchema
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer):
+    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+        assert consumer
         consumer.mark_left(self.data)
 
 

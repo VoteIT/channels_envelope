@@ -33,7 +33,7 @@ class TestingEnvelope(Envelope):
 class WebsocketHello(AsyncRunnable):
     name = "testing.hello"
 
-    async def run(self, consumer):
+    async def run(self, **kwargs):
         pass
 
 

@@ -148,7 +148,7 @@ class AsyncRunnable(Message, ABC):
     """
 
     @abstractmethod
-    async def run(self, consumer):
+    async def run(self, consumer=None, **kwargs):
         pass
 
 
@@ -162,9 +162,6 @@ class DeferredJob(Message, ABC):
     job_timeout = 20
     queue: str = DEFAULT_QUEUE_NAME  # Queue name
 
-    # job_timeout = 7
-    # autocommit = True
-    # is_async = True
     atomic: bool = True
     on_worker: bool = False
     # Markers for type checking
@@ -187,7 +184,7 @@ class DeferredJob(Message, ABC):
     def rq_queue(self) -> Queue:
         return get_queue(self.queue)
 
-    async def pre_queue(self, consumer):
+    async def pre_queue(self, **kwargs):
         """
         Do something before entering the queue. Only applies to when the consumer receives the message.
         It's a good idea to avoid using this if it's not needed.
@@ -206,7 +203,7 @@ class DeferredJob(Message, ABC):
         if self.data:
             data = self.data.dict()
         kwargs.setdefault("on_failure", handle_failure)
-        self.rq_queue.enqueue(
+        return self.rq_queue.enqueue(
             self.job,
             t=self.name,
             mm=self.mm.dict(),
