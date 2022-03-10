@@ -25,7 +25,6 @@ from envelope.core.schemas import NoPayload
 from envelope.models import Connection
 from envelope.queues import DEFAULT_QUEUE_NAME
 from envelope.utils import get_error_type
-from envelope.utils import websocket_send_error
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -61,7 +60,6 @@ class Message(MessageStates, Generic[S], ABC):
         mm: Union[dict, MessageMeta] = None,
         data: Optional[dict] = None,
         _registry: Optional[str] = None,
-        _orm: Optional[Any] = None,
         **kwargs,
     ):
         if mm is None:
@@ -77,19 +75,12 @@ class Message(MessageStates, Generic[S], ABC):
                 _registry in self.registries()
             ), "Specified registry not valid for this message type"
             self.mm.registry = _registry
-        if _orm is not None:
-            assert data is None, "Can only specify data or _orm"
-            assert not kwargs, "kwargs and _orm isn't supported together"
-            self.initial_data = _orm
-            self._data = self.schema.from_orm(_orm)
-            self._validated = True
-        else:
-            if data is None:
-                data = {}
-            data.update(kwargs)
-            self.initial_data = data
-            self._data = None
-            self._validated = False
+        if data is None:
+            data = {}
+        data.update(kwargs)
+        self.initial_data = data
+        self._data = None
+        self._validated = False
         if self.schema is NoPayload:
             self.validate()
 
