@@ -59,6 +59,7 @@ class Message(MessageStates, Generic[S], ABC):
         *,
         mm: Union[dict, MessageMeta] = None,
         data: Optional[dict] = None,
+        _orm: Optional[Any] = None,
         _registry: Optional[str] = None,
         **kwargs,
     ):
@@ -68,19 +69,25 @@ class Message(MessageStates, Generic[S], ABC):
             self.mm = mm
         else:
             assert isinstance(self.name, str), "Name attribute is not set as a string"
-            mm["type_name"] = self.name
             self.mm = MessageMeta(**mm)
         if _registry is not None:
             assert (
                 _registry in self.registries()
             ), "Specified registry not valid for this message type"
             self.mm.registry = _registry
-        if data is None:
-            data = {}
-        data.update(kwargs)
-        self.initial_data = data
-        self._data = None
-        self._validated = False
+        if _orm is not None:
+            assert data is None, "Can only specify data or _orm"
+            assert not kwargs, "kwargs and _orm isn't supported together"
+            self.initial_data = _orm
+            self._data = self.schema.from_orm(_orm)
+            self._validated = True
+        else:
+            if data is None:
+                data = {}
+            data.update(kwargs)
+            self.initial_data = data
+            self._data = None
+            self._validated = False
         if self.schema is NoPayload:
             self.validate()
 
