@@ -27,7 +27,7 @@ from envelope.utils import websocket_send
 from envelope.core.channels import ContextChannel
 
 if TYPE_CHECKING:
-    from envelope.consumers.websocket import EnvelopeWebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 SUBSCRIBE = "channel.subscribe"
 LEAVE = "channel.leave"
@@ -94,7 +94,7 @@ class Subscribe(ChannelCommand, DeferredJob):
         if app_state:
             return list(app_state)
 
-    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer):
+    async def pre_queue(self, consumer: WebsocketConsumer):
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
@@ -216,10 +216,11 @@ class RecheckChannelSubscriptions(DeferredJob):
     schema = RecheckSubscriptionsSchema
     data: RecheckSubscriptionsSchema
 
-    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer):
-        self.data.consumer_name = (
-            consumer.channel_name
-        )  # It might be sent by someone else
+    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+        assert consumer
+        assert consumer.channel_name
+        # It might be sent by someone else
+        self.data.consumer_name = consumer.channel_name
         self.data.subscriptions.update(consumer.subscriptions)
 
     @property

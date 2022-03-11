@@ -43,7 +43,6 @@ class SubscribeTests(TestCase):
 
         return IncomingWebsocketEnvelope.pack(msg)
 
-
     async def test_subscribe(self):
         self.communicator = await mk_communicator(self.user_one)
         msg = self._mk_msg()
@@ -91,8 +90,8 @@ class SubscribeTests(TestCase):
         self.communicator = await mk_communicator(self.user_two, queue=self.queue)
         await self.communicator.send_json_to(envelope.data.dict())
         response = await self.communicator.receive_json_from()
-        self.assertEqual("channel.subscribed", response['t'])
-        self.assertEqual("q", response['s'])
+        self.assertEqual("channel.subscribed", response["t"])
+        self.assertEqual("q", response["s"])
         worker = mk_simple_worker()
         await sync_to_async(worker.work)(burst=True)
         response = await self.communicator.receive_json_from()
@@ -230,7 +229,9 @@ class RecheckChannelSubscriptionsTests(TestCase):
     def _mk_msg(self, **kwargs):
         from envelope.messages.channels import RecheckChannelSubscriptions
 
-        return RecheckChannelSubscriptions(mm={"user_pk": self.user_one.pk}, **kwargs)
+        return RecheckChannelSubscriptions(
+            mm={"user_pk": self.user_one.pk, "consumer_name": "abc"}, **kwargs
+        )
 
     async def test_recheck_channel_subscriptions_pre_queue(self):
         from envelope.consumers.websocket import WebsocketConsumer
@@ -251,9 +252,9 @@ class RecheckChannelSubscriptionsTests(TestCase):
 
         good_subscription = ChannelSchema(pk=self.user_one.pk, channel_type="user")
         bad_subscription = ChannelSchema(pk=self.user_two.pk, channel_type="user")
-        msg = self._mk_msg(
-            subscriptions=[good_subscription, bad_subscription], consumer_name="abc"
-        )
+        msg = self._mk_msg(subscriptions=[good_subscription, bad_subscription])
         msg.validate()
+        # Fake pre-queue
+        msg.data.consumer_name = "abc"
         results = msg.run_job()
         self.assertEqual([bad_subscription], results)

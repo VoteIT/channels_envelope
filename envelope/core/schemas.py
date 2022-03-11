@@ -66,6 +66,9 @@ class MessageMeta(BaseModel):
     state: Optional[str]
     registry: Optional[str]
 
+    class Config:
+        extra = "forbid"
+
     def envelope_data(self) -> dict:
         data = dict(i=self.id, l=self.language)
         if self.state:
