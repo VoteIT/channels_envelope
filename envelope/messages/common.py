@@ -17,3 +17,8 @@ class ProgressNum(Message):
     name = "progress.num"
     schema = ProgressSchema
     data: ProgressSchema
+
+
+@add_message(WS_OUTGOING)
+class Status(Message):
+    name = "s.stat"
