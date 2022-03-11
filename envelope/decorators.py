@@ -1,5 +1,3 @@
-from envelope import DEFAULT_CHANNELS
-
 
 def add_message(*namespaces):
     """

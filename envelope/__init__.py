@@ -6,7 +6,8 @@ WS_INCOMING = "ws_incoming"
 WS_OUTGOING = "ws_outgoing"
 INTERNAL = "internal"
 DEFAULT_ERRORS = "default_errors"
-DEFAULT_CHANNELS = "default"
+DEFAULT_PUBSUB_CHANNELS = "pubsub"
+DEFAULT_CONTEXT_CHANNELS = "context"
 
 # The name of the consumer function that will receive outgoing websocket messages queued from a script
 # or somewhere outside of the consumer

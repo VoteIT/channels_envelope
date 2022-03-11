@@ -8,11 +8,12 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
 
-from envelope.core.channels import PubSubChannel
 
 if TYPE_CHECKING:
-    from envelope.handlers.base import AsyncHandler
     from envelope.core.message import Message
+    from envelope.core.channels import ContextChannel
+    from envelope.core.channels import PubSubChannel
+    from envelope.handlers.base import AsyncHandler
 
 global_message_registry = {}
 global_handler_registry = {}
@@ -94,7 +95,7 @@ class HandlerRegistry(Registry):
 
 class ChannelRegistry(Registry):
     """
-    This stores channel types the system should be aware of.
+    Stores channel types the system should be aware of.
     It's up to the developer to decide if a channel should be registered or not.
     """
 
@@ -105,3 +106,20 @@ class ChannelRegistry(Registry):
         from envelope.core.channels import PubSubChannel
 
         return PubSubChannel
+
+
+class ContextChannelRegistry(Registry):
+    """
+    Stores channel types the system should be aware of.
+    It's up to the developer to decide if a channel should be registered or not.
+
+    This is separate from the pub/sub channels since they can't have permissions.
+    Subscribe/leave commands are only executed against channels within this registry.
+    """
+    global_registry = global_channel_registry
+    data: Dict[str, Type[ContextChannel]]
+
+    def get_type(self):
+        from envelope.core.channels import ContextChannel
+
+        return ContextChannel

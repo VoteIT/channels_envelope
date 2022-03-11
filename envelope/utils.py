@@ -15,7 +15,7 @@ from django.db.models import QuerySet
 from django.utils.functional import cached_property
 from pydantic import ValidationError
 
-from envelope import DEFAULT_CHANNELS
+from envelope import DEFAULT_CONTEXT_CHANNELS
 from envelope import DEFAULT_ERRORS
 from envelope import Error
 from envelope import INTERNAL_TRANSPORT
@@ -96,7 +96,7 @@ def get_handler_registry(name: str) -> HandlerRegistry:
     return global_handler_registry[name]
 
 
-def get_channel_registry(name: str = DEFAULT_CHANNELS) -> ChannelRegistry:
+def get_channel_registry(name: str = DEFAULT_CONTEXT_CHANNELS) -> ChannelRegistry:
     from envelope.core.registry import global_channel_registry
 
     return global_channel_registry[name]

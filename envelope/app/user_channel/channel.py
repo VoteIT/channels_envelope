@@ -1,11 +1,11 @@
 from django.contrib.auth import get_user_model
 
-from envelope import DEFAULT_CHANNELS
+from envelope import DEFAULT_CONTEXT_CHANNELS
 from envelope.core.channels import ContextChannel
 from envelope.decorators import add_channel
 
 
-@add_channel(DEFAULT_CHANNELS)
+@add_channel(DEFAULT_CONTEXT_CHANNELS)
 class UserChannel(ContextChannel):
     model = get_user_model()
     permission = None

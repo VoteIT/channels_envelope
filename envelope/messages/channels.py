@@ -9,7 +9,7 @@ from asgiref.sync import async_to_sync
 from pydantic import BaseModel
 from pydantic import validator
 
-from envelope import DEFAULT_CHANNELS
+from envelope import DEFAULT_CONTEXT_CHANNELS
 from envelope import Error
 from envelope import INTERNAL
 from envelope import WS_INCOMING
@@ -47,7 +47,7 @@ class ChannelSchema(BaseModel):
 
     @validator("channel_type", allow_reuse=True)
     def real_channel_type(cls, v):
-        cr = get_channel_registry()
+        cr = get_channel_registry(name=DEFAULT_CONTEXT_CHANNELS)
         v = v.lower()
         if v not in cr:  # pragma: no cover
             raise ValueError(f"'{v}' is not a valid channel")
@@ -66,7 +66,7 @@ class ChannelSubscription(ChannelSchema):
 class ChannelCommand:
     schema = ChannelSchema
     data: ChannelSchema
-    channel_registry = DEFAULT_CHANNELS
+    channel_registry = DEFAULT_CONTEXT_CHANNELS
 
     def get_channel(
         self, channel_type: str, pk: int, consumer_name: str
@@ -135,7 +135,7 @@ class Subscribe(ChannelCommand, DeferredJob):
 class Leave(ChannelCommand, AsyncRunnable):
     name = LEAVE
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs) -> Left:
+    async def run(self, consumer: WebsocketConsumer = None, **kwargs) -> Left:
         # This is without permission checks since there's no reason to go Hotel California on consumers.
         # Users may only run leave commands on their own consumer anyway
         assert consumer
@@ -154,7 +154,7 @@ class Leave(ChannelCommand, AsyncRunnable):
 class ListSubscriptions(AsyncRunnable):
     name = LIST_SUBSCRIPTIONS
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+    async def run(self, consumer: WebsocketConsumer = None, **kwargs):
         assert consumer
         response = Subscriptions.from_message(
             self, subscriptions=list(consumer.subscriptions)
@@ -169,7 +169,7 @@ class Subscribed(AsyncRunnable):
     schema = ChannelSubscription
     data: ChannelSubscription
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+    async def run(self, consumer: WebsocketConsumer = None, **kwargs):
         assert consumer
         subscription = ChannelSchema(**self.data.dict())
         consumer.mark_subscribed(subscription)
@@ -181,7 +181,7 @@ class Left(AsyncRunnable):
     schema = ChannelSchema
     data: ChannelSchema
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+    async def run(self, consumer: WebsocketConsumer = None, **kwargs):
         assert consumer
         consumer.mark_left(self.data)
 
@@ -216,7 +216,7 @@ class RecheckChannelSubscriptions(DeferredJob):
     schema = RecheckSubscriptionsSchema
     data: RecheckSubscriptionsSchema
 
-    async def pre_queue(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+    async def pre_queue(self, consumer: WebsocketConsumer = None, **kwargs):
         assert consumer
         assert consumer.channel_name
         # It might be sent by someone else
@@ -228,7 +228,7 @@ class RecheckChannelSubscriptions(DeferredJob):
         return bool(self.data.subscriptions)
 
     def run_job(self) -> List[ChannelSchema]:
-        registry = get_channel_registry()
+        registry = get_channel_registry(name=DEFAULT_CONTEXT_CHANNELS)
         # We don't really know if someone is subscribing due to how channels work, but we won't resubscribe
         results = []  # The returned data is meant for unittesting and similar
         for channel_info in self.data.subscriptions:
