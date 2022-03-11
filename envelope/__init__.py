@@ -38,6 +38,7 @@ class MessageStates:
 class Error:
     GENERIC = "error.generic"
     VALIDATION = "error.validation"
+    BAD_REQUEST = "error.bad_request"
     MSG_TYPE = "error.msg_type"
     NOT_FOUND = "error.not_found"
     UNAUTHORIZED = "error.unauthorized"

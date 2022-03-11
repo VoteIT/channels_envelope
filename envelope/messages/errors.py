@@ -42,6 +42,15 @@ class MessageTypeError(ErrorMessage[MessageTypeErrorSchema]):
     schema = MessageTypeErrorSchema
 
 
+@add_message(DEFAULT_ERRORS)
+class BadRequestError(GenericError):
+    """
+    Pretty much HTTP 400
+    """
+
+    name = Error.BAD_REQUEST
+
+
 class NotFoundSchema(BaseModel):
     model: str
     key: str = "pk"
