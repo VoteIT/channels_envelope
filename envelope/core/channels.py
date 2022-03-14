@@ -10,6 +10,7 @@ from channels.layers import get_channel_layer
 from django.db import models
 from django.db import transaction
 from django.utils.functional import cached_property
+from typing import Type
 
 from envelope import Error
 from envelope import WS_SEND_TRANSPORT
@@ -18,7 +19,6 @@ from envelope.utils import get_error_type
 
 if TYPE_CHECKING:
     from envelope.core.message import Message
-    from envelope.envelope import Envelope
 
 
 class PubSubChannel(ABC):
@@ -120,7 +120,7 @@ class ContextChannel(PubSubChannel, ABC):
 
     @property
     @abstractmethod
-    def model(self) -> models.Model:
+    def model(self) -> Type[models.Model]:
         """
         Set as property on subclass. Model should be the type of model this object channel is for.
         """
