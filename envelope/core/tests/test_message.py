@@ -89,10 +89,11 @@ class MessageTests(TestCase):
         self.assertIsNone(msg.data)
         self.assertTrue(msg.is_validated)
 
-    def test_data_access_before_validation(self):
-        msg = TestingMessage()
-        with self.assertRaises(ValueError):
-            msg.data
+    def test_data_access_before_validation_performs_lazy_validation(self):
+        msg = TestingMessage(num=1)
+        self.assertFalse(msg.is_validated)
+        msg.data
+        self.assertTrue(msg.is_validated)
 
     def test_data_validation(self):
         msg = TestingMessage()

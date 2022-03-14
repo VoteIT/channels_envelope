@@ -106,7 +106,9 @@ class Message(MessageStates, Generic[S], ABC):
     def data(self) -> S:
         if self.is_validated:
             return self._data
-        raise ValueError("data accessed before validation")
+        # We may not want to automatically validate data later on. TBD
+        self.validate()
+        return self._data
 
     @property
     def is_validated(self) -> bool:
