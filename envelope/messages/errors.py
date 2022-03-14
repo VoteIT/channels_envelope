@@ -5,7 +5,7 @@ from django.db.models import Model
 from pydantic import BaseModel
 from pydantic import validator
 
-from envelope import DEFAULT_ERRORS
+from envelope import ERRORS
 from envelope import Error
 from envelope.core.message import ErrorMessage
 from envelope.decorators import add_message
@@ -15,7 +15,7 @@ class ErrorSchema(BaseModel):
     msg: Optional[str]
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class GenericError(ErrorMessage[ErrorSchema]):
     name = Error.GENERIC
     schema = ErrorSchema
@@ -25,7 +25,7 @@ class ValidationErrorSchema(ErrorSchema):
     errors: List[dict]
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class ValidationErrorMsg(ErrorMessage[ValidationErrorSchema]):
     name = Error.VALIDATION
     schema = ValidationErrorSchema
@@ -36,13 +36,13 @@ class MessageTypeErrorSchema(ErrorSchema):
     registry: str
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class MessageTypeError(ErrorMessage[MessageTypeErrorSchema]):
     name = Error.MSG_TYPE
     schema = MessageTypeErrorSchema
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class BadRequestError(GenericError):
     """
     Pretty much HTTP 400
@@ -69,7 +69,7 @@ class NotFoundSchema(BaseModel):
         )
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class NotFoundError(ErrorMessage[NotFoundSchema]):
     name = Error.NOT_FOUND
     schema = NotFoundSchema
@@ -79,7 +79,7 @@ class UnauthorizedSchema(NotFoundSchema):
     permission: Optional[str]
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class UnauthorizedError(ErrorMessage[UnauthorizedSchema]):
     name = Error.UNAUTHORIZED
     schema = UnauthorizedSchema
@@ -89,13 +89,13 @@ class SubscribeSchema(BaseModel):
     channel_name: str
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class SubscribeError(ErrorMessage[SubscribeSchema]):
     name = Error.SUBSCRIBE
     schema = SubscribeSchema
 
 
-@add_message(DEFAULT_ERRORS)
+@add_message(ERRORS)
 class JobError(GenericError):
     """
     A background task caused an exception/error. This is not meant for error checking, but merely to notify

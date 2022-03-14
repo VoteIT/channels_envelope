@@ -1,4 +1,3 @@
-
 def add_message(*namespaces):
     """
     Decorator to add messages to a specific message registry.
@@ -63,35 +62,80 @@ def add_handler(*namespaces):
     return _inner
 
 
-def add_channel(*namespaces):
+def add_pubsub_channel(klass):
     """
-    Decorator to add pub/sbunchannel to a specific registry
+    Decorator to add pub/sub channel
 
-    >>> from envelope.testing import testing_channels
     >>> from envelope.core.channels import PubSubChannel
-    >>> from envelope.utils import get_channel_registry
+    >>> from envelope.registries import pubsub_channel_registry
 
-    >>> @add_channel('testing')
+
+    >>> @add_pubsub_channel
     ... class HelloWorld(PubSubChannel):
     ...     name='hello_world'
     ...     channel_name='testing_demo'
     ...
 
-    >>> 'hello_world' in testing_channels
+    >>> 'hello_world' in pubsub_channel_registry
     True
 
+    Cleanup
+    >>> del pubsub_channel_registry['hello_world']
     """
-    # FIXME: Allow arg-less default
+    from envelope.registries import pubsub_channel_registry
 
-    def _inner(cls):
-        from envelope.core.registry import global_channel_registry
+    pubsub_channel_registry.add(klass)
+    return klass
 
-        for name in namespaces:
-            assert name in global_channel_registry, (
-                "No channel registry named %s" % name
-            )
-            reg = global_channel_registry[name]
-            reg.add(cls)
-        return cls
 
-    return _inner
+def add_context_channel(klass):
+    """
+    Decorator to context channel
+
+    >>> from envelope.core.channels import ContextChannel
+    >>> from envelope.registries import context_channel_registry
+    >>> from django.contrib.auth import get_user_model
+
+
+    >>> @add_context_channel
+    ... class HelloWorld(ContextChannel):
+    ...     name='hello_world'
+    ...     model=get_user_model()
+    ...     permission = None
+    ...
+
+    >>> 'hello_world' in context_channel_registry
+    True
+
+    Cleanup
+    >>> del context_channel_registry['hello_world']
+    """
+    from envelope.registries import context_channel_registry
+
+    context_channel_registry.add(klass)
+    return klass
+
+
+def add_envelope(klass):
+    """
+    Decorator to add handlers to several namespaces.
+
+    >>> from envelope.core.envelope import Envelope
+    >>> from envelope.registries import envelope_registry
+
+    >>> @add_envelope
+    ... class HelloEnvelope(Envelope):
+    ...     name = 'testing'
+    ...     schema = object()
+    ...
+
+    >>> 'testing' in envelope_registry
+    True
+
+    Cleanup
+    >>> del envelope_registry['testing']
+    """
+    from envelope.registries import envelope_registry
+
+    envelope_registry.add(klass)
+    return klass

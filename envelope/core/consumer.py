@@ -79,11 +79,6 @@ class BaseWebsocketConsumer(AsyncWebsocketConsumer, ABC):
         # Set timestamps
         self.last_job = self.last_sent = self.last_received = now()
 
-        if internal_envelope is None:
-            from envelope.envelope import InternalEnvelope
-
-            self.internal_envelope = InternalEnvelope
-
         # Connection signals / jobs
         self.enable_connection_signals = enable_connection_signals
         if connect_signal_job:

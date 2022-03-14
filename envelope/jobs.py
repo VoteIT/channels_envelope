@@ -7,14 +7,15 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils.timezone import now
 from django.utils.translation import activate
+from envelope import WS_INCOMING
 
 from envelope import Error
-from envelope.envelope import IncomingWebsocketEnvelope
 from envelope.handlers.deferred_job import DeferredJob
 from envelope.core.message import ErrorMessage
 from envelope.models import Connection
 from envelope.signals import client_close
 from envelope.signals import client_connect
+from envelope.utils import get_envelope_registry
 from envelope.utils import get_error_type
 from envelope.utils import update_connection_status
 from envelope.utils import websocket_send_error
@@ -131,9 +132,11 @@ def default_incoming_websocket(
     data: dict,
     mm: dict,
     enqueued_at: datetime = None,
-    envelope=IncomingWebsocketEnvelope,  # For testing injection
+    envelope=WS_INCOMING,  # For testing injection
 ):
-    env = envelope(t=t, p=data)
+    reg = get_envelope_registry()
+    envelope_type = reg[envelope]
+    env = envelope_type(t=t, p=data)
     msg = env.unpack(mm=mm)
     run_job(msg, enqueued_at=enqueued_at)
 

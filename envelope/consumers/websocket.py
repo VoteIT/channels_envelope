@@ -5,6 +5,12 @@ from logging import getLogger
 from channels.exceptions import DenyConnection
 from django.utils.timezone import now
 from django.utils.translation import activate
+from envelope import INTERNAL
+
+from envelope import ERRORS
+from envelope import WS_OUTGOING
+
+from envelope import WS_INCOMING
 from pydantic import ValidationError
 
 from envelope.core.message import ErrorMessage
@@ -15,7 +21,7 @@ from envelope.jobs import mark_connection_action
 from envelope.jobs import signal_websocket_close
 from envelope.jobs import signal_websocket_connect
 from envelope.messages.errors import ValidationErrorMsg
-
+from envelope.utils import get_envelope_registry
 
 logger = getLogger(__name__)
 
@@ -31,10 +37,10 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         enable_connection_signals=True,
         connect_signal_job=signal_websocket_connect,
         close_signal_job=signal_websocket_close,
-        incoming_envelope=None,
-        outgoing_envelope=None,
-        error_envelope=None,
-        internal_envelope=None,
+        incoming_envelope=WS_INCOMING,
+        outgoing_envelope=WS_OUTGOING,
+        error_envelope=ERRORS,
+        internal_envelope=INTERNAL,
         **kwargs
     ):
         super().__init__(
@@ -44,23 +50,11 @@ class WebsocketConsumer(BaseWebsocketConsumer):
             **kwargs
         )
         # Set envelope classes
-        if incoming_envelope is None:
-            from envelope.envelope import IncomingWebsocketEnvelope
-
-            self.incoming_envelope = IncomingWebsocketEnvelope
-        if outgoing_envelope is None:
-            from envelope.envelope import OutgoingWebsocketEnvelope
-
-            self.outgoing_envelope = OutgoingWebsocketEnvelope
-        if error_envelope is None:
-            from envelope.envelope import ErrorEnvelope
-
-            self.error_envelope = ErrorEnvelope
-
-        if internal_envelope is None:
-            from envelope.envelope import InternalEnvelope
-
-            self.internal_envelope = InternalEnvelope
+        envelopes = get_envelope_registry()
+        self.incoming_envelope = envelopes[incoming_envelope]
+        self.outgoing_envelope = envelopes[outgoing_envelope]
+        self.error_envelope = envelopes[error_envelope]
+        self.internal_envelope = envelopes[internal_envelope]
 
     async def connect(self):
         self.language = get_language(self.scope)
@@ -157,22 +151,20 @@ class WebsocketConsumer(BaseWebsocketConsumer):
     async def send_ws_error(self, error: ErrorMessage):
         self.last_error = now()
         if isinstance(error, ErrorMessage):
-            if error.mm.registry != self.error_envelope.message_registry.name:
-                error.mm.registry = self.error_envelope.message_registry.name
-            self.error_envelope.is_compatible(error, exception=True)
+            if error.mm.registry != ERRORS:
+                error.mm.registry = ERRORS
             await self.handle_message(error)
-            envelope = self.error_envelope.pack(error)
+            envelope = error.envelope.pack(error)
         else:
             raise TypeError("error is not an ErrorMessage instance")
         await self.send(envelope=envelope)
 
     async def send_ws_message(self, message, state=None):
         if isinstance(message, Message):
-            if message.mm.registry != self.outgoing_envelope.message_registry.name:
-                message.mm.registry = self.outgoing_envelope.message_registry.name
-            self.outgoing_envelope.is_compatible(message, exception=True)
+            if message.mm.registry != WS_OUTGOING:
+                message.mm.registry = WS_OUTGOING
             await self.handle_message(message)
-            envelope = self.outgoing_envelope.pack(message)
+            envelope = message.envelope.pack(message)
         else:
             raise TypeError("message is not a Message instance")
         if state:

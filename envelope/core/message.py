@@ -24,10 +24,12 @@ from envelope.core.schemas import MessageMeta
 from envelope.core.schemas import NoPayload
 from envelope.models import Connection
 from envelope.queues import DEFAULT_QUEUE_NAME
+from envelope.utils import get_envelope_registry
 from envelope.utils import get_error_type
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
+    from envelope.core.envelope import Envelope
 
 
 S = TypeVar("S")  # schema
@@ -131,6 +133,14 @@ class Message(MessageStates, Generic[S], ABC):
         """
         if self.mm.consumer_name:
             return Connection.objects.filter(channel_name=self.mm.consumer_name).first()
+
+    @cached_property
+    def envelope(self) -> Type[Envelope]:
+        assert self.mm.registry, f"Message {self} has no registry name"
+        reg = get_envelope_registry()
+        if self.mm.registry not in reg:
+            raise KeyError(f"No registry called {self.mm.registry}")
+        return reg[self.mm.registry]
 
 
 class ErrorMessage(Message, Generic[S], Exception, ABC):

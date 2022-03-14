@@ -11,33 +11,17 @@ from typing import Type
 
 if TYPE_CHECKING:
     from envelope.core.message import Message
+    from envelope.core.envelope import Envelope
     from envelope.core.channels import ContextChannel
     from envelope.core.channels import PubSubChannel
     from envelope.handlers.base import AsyncHandler
 
 global_message_registry = {}
 global_handler_registry = {}
-global_channel_registry = {}
 
 
 class Registry(UserDict, ABC):
-    name: str
-    global_registry: dict  # Also for testing injection
-
-    def __init__(self, name):
-        super().__init__()
-        if name in self.global_registry:
-            raise KeyError(f"{name} already exists within this registry")
-        self.global_registry[name] = self
-        self.name = name
-
-    @property
     @abstractmethod
-    def global_registry(self):
-        """
-        Return a dict where every instance of this registry type will be stored
-        """
-
     def get_type(self) -> Optional[Type]:
         ...
 
@@ -59,11 +43,30 @@ class Registry(UserDict, ABC):
             raise TypeError(
                 f"{klass} doesn't implement the required abstract methods: '{missing}'"
             )
-        klass.registries().add(self.name)
         super().__setitem__(name, klass)
 
 
-class MessageRegistry(Registry):
+class MultiRegistry(Registry, ABC):
+    def __init__(self, name):
+        super().__init__()
+        if name in self.global_registry:
+            raise KeyError(f"{name} already exists within this registry")
+        self.global_registry[name] = self
+        self.name = name
+
+    @property
+    @abstractmethod
+    def global_registry(self):
+        """
+        Return a dict where every instance of this registry type will be stored
+        """
+
+    def __setitem__(self, name, klass):
+        super().__setitem__(name, klass)
+        klass.registries().add(self.name)
+
+
+class MessageRegistry(MultiRegistry):
     global_registry = global_message_registry
     data: Dict[str, Type[Message]]
 
@@ -73,7 +76,7 @@ class MessageRegistry(Registry):
         return Message
 
 
-class HandlerRegistry(Registry):
+class HandlerRegistry(MultiRegistry):
     global_registry = global_handler_registry
     data: Dict[str, Type[AsyncHandler]]
 
@@ -93,13 +96,26 @@ class HandlerRegistry(Registry):
         return result
 
 
+class EnvelopeRegistry(Registry):
+    """
+    Contains envelopes the system should be aware of.
+    Any message registry needs a corresponding envelope.
+    """
+
+    data: Dict[str, Type[Envelope]]
+
+    def get_type(self):
+        from envelope.core.envelope import Envelope
+
+        return Envelope
+
+
 class ChannelRegistry(Registry):
     """
     Stores channel types the system should be aware of.
     It's up to the developer to decide if a channel should be registered or not.
     """
 
-    global_registry = global_channel_registry
     data: Dict[str, Type[PubSubChannel]]
 
     def get_type(self):
@@ -116,10 +132,29 @@ class ContextChannelRegistry(Registry):
     This is separate from the pub/sub channels since they can't have permissions.
     Subscribe/leave commands are only executed against channels within this registry.
     """
-    global_registry = global_channel_registry
+
     data: Dict[str, Type[ContextChannel]]
 
     def get_type(self):
         from envelope.core.channels import ContextChannel
 
         return ContextChannel
+
+
+def validate_registries():
+    """
+    Make sure all registries here have a corresponding envelope and matching handlers.
+
+    >>> from envelope.apps import ChannelsEnvelopeConfig
+    >>> ChannelsEnvelopeConfig.populate_registries()
+    >>> validate_registries()
+    """
+    from envelope.registries import envelope_registry
+
+    for k in global_message_registry:
+        assert (
+            k in envelope_registry
+        ), f"Message registry {k} has no envelope registered to handle it"
+        assert (
+            k in global_handler_registry
+        ), f"Message registry {k} has no handler registry with the same name"

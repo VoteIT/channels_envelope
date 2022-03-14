@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections import UserList
 from datetime import datetime
+from logging import getLogger
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
+from typing import Union
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -13,10 +15,11 @@ from django.db import transaction
 from django.db.models import Model
 from django.db.models import QuerySet
 from django.utils.functional import cached_property
-from pydantic import ValidationError
+from envelope import INTERNAL
 
-from envelope import DEFAULT_CONTEXT_CHANNELS
-from envelope import DEFAULT_ERRORS
+from envelope import WS_OUTGOING
+from pydantic import ValidationError
+from envelope import ERRORS
 from envelope import Error
 from envelope import INTERNAL_TRANSPORT
 from envelope import WS_SEND_ERROR_TRANSPORT
@@ -28,11 +31,14 @@ if TYPE_CHECKING:
     from envelope.core.registry import HandlerRegistry
     from envelope.core.registry import MessageRegistry
     from envelope.core.registry import ChannelRegistry
+    from envelope.core.registry import ContextChannelRegistry
+    from envelope.core.registry import EnvelopeRegistry
     from envelope.core.envelope import Envelope
     from envelope.core.message import Message
     from envelope.core.message import ErrorMessage
 
 channel_layer = get_channel_layer()
+logger = getLogger(__name__)
 
 
 def get_error_message_class():
@@ -96,10 +102,22 @@ def get_handler_registry(name: str) -> HandlerRegistry:
     return global_handler_registry[name]
 
 
-def get_channel_registry(name: str = DEFAULT_CONTEXT_CHANNELS) -> ChannelRegistry:
-    from envelope.core.registry import global_channel_registry
+def get_pubsub_channel_registry() -> ChannelRegistry:
+    from envelope.registries import pubsub_channel_registry
 
-    return global_channel_registry[name]
+    return pubsub_channel_registry
+
+
+def get_context_channel_registry() -> ContextChannelRegistry:
+    from envelope.registries import context_channel_registry
+
+    return context_channel_registry
+
+
+def get_envelope_registry() -> EnvelopeRegistry:
+    from envelope.registries import envelope_registry
+
+    return envelope_registry
 
 
 class SenderUtil:
@@ -179,8 +197,6 @@ def websocket_send(
     True
 
     """
-    from envelope.envelope import OutgoingWebsocketEnvelope
-
     assert isinstance(message, get_message_class())
     if channel_name is None:
         assert message.mm.consumer_name
@@ -195,8 +211,12 @@ def websocket_send(
             message, errors=exc.errors()
         )
         raise error
-    OutgoingWebsocketEnvelope.is_compatible(message, exception=True)
-    envelope = OutgoingWebsocketEnvelope.pack(message)
+    if message.mm.registry is None:
+        logger.debug(f"{message} lacks registry")
+        message.mm.registry = WS_OUTGOING
+    reg = get_envelope_registry()
+    envelope_type = reg[WS_OUTGOING]
+    envelope = envelope_type.pack(message)
     if state:
         envelope.data.s = state
     sender = SenderUtil(
@@ -247,8 +267,6 @@ def internal_send(
     >>> post_commit_called
     True
     """
-    from envelope.envelope import InternalEnvelope
-
     assert isinstance(message, get_message_class())
     try:
         message.validate()
@@ -258,8 +276,12 @@ def internal_send(
             message, errors=exc.errors()
         )
         raise error
-    InternalEnvelope.is_compatible(message, exception=True)
-    envelope = InternalEnvelope.pack(message)
+    if message.mm.registry is None:
+        logger.debug(f"{message} lacks registry")
+        message.mm.registry = INTERNAL
+    reg = get_envelope_registry()
+    envelope_type = reg[INTERNAL]
+    envelope = envelope_type.pack(message)
     if state:
         envelope.data.s = state
     sender = SenderUtil(
@@ -283,11 +305,14 @@ def websocket_send_error(
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
     """
-    from envelope.envelope import ErrorEnvelope
 
     assert isinstance(error, get_error_message_class())
-    ErrorEnvelope.is_compatible(error, exception=True)
-    envelope = ErrorEnvelope.pack(error)
+    if error.mm.registry is None:
+        logger.debug(f"{error} lacks registry")
+        error.mm.registry = ERRORS
+    reg = get_envelope_registry()
+    envelope_type = reg[ERRORS]
+    envelope = envelope_type.pack(error)
     sender = SenderUtil(
         envelope,
         channel_name,
@@ -303,9 +328,7 @@ def get_message_type(message_name: str, _registry: str) -> Type[Message]:
     return reg[message_name]
 
 
-def get_error_type(
-    error_name: str, _registry: str = DEFAULT_ERRORS
-) -> Type[ErrorMessage]:
+def get_error_type(error_name: str, _registry: str = ERRORS) -> Type[ErrorMessage]:
     reg = get_message_registry(_registry)
     klass = reg[error_name]
     assert issubclass(klass, get_error_message_class())
@@ -318,17 +341,18 @@ class AppState(UserList):
     """
 
     @cached_property
-    def envelope(self):
-        from envelope.envelope import OutgoingWebsocketEnvelope
-
-        return OutgoingWebsocketEnvelope
+    def envelope_type(self) -> Type[Envelope]:
+        reg = get_envelope_registry()
+        return reg[WS_OUTGOING]
 
     def append(self, item: Message) -> None:
         """Insert outgoing message into envelope 👅"""
-        self.envelope.is_compatible(item, exception=True)
+        assert (
+            WS_OUTGOING in item.registries()
+        ), f"{item} is not registered as an outgoing websocket message"
 
         super().append(
-            self.envelope(
+            self.envelope_type(
                 t=item.name,
                 p=item.data,
             )

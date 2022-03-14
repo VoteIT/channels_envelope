@@ -1,24 +1,17 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 
 # Registry names
 WS_INCOMING = "ws_incoming"
 WS_OUTGOING = "ws_outgoing"
 INTERNAL = "internal"
-DEFAULT_ERRORS = "default_errors"
-DEFAULT_PUBSUB_CHANNELS = "pubsub"
-DEFAULT_CONTEXT_CHANNELS = "context"
+ERRORS = "errors"
 
 # The name of the consumer function that will receive outgoing websocket messages queued from a script
-# or somewhere outside of the consumer
+# or somewhere outside the consumer
 WS_SEND_TRANSPORT = "websocket.send"
 WS_SEND_ERROR_TRANSPORT = "ws.error.send"
 INTERNAL_TRANSPORT = "internal.msg"
-
-# Note: django_rq creates jobs on import, so there's no way to override this setting during runtime
-
-if TYPE_CHECKING:
-    from envelope.messages import ErrorMessage
 
 
 class MessageStates:

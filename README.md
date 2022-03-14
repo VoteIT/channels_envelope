@@ -101,7 +101,7 @@ Use names that explain the direction, for instance 'websocket_incoming'.
 ### Handler
 
 Checks incoming messages for specific patterns and perform actions on them.
-A simle example would be to install a print-handler and simply run
+A simple example would be to install a print-handler and simply run
 print() on the message payload.
 
 The default handlers AsyncRunnableHandler and DeferredJobHandler
@@ -109,7 +109,7 @@ checks for a specific message subclass.
 
 ### Handler registry
 
-Also a dict-like registry. It may loop through handlers and check them
+A dict-like registry. It may loop through handlers and check them
 against a specific message.
 
 As with messages, handler registries must also be named and unless
@@ -118,7 +118,7 @@ name as the communication channel. (See example below)
 
 ## Code example - building a message ping/pong ("Hello")
 
-First off we'll create a message regitries, and handler registries
+First off we'll create a message registries, and handler registries
 where we'll store message classes and message handlers.
 
 Note that registries are meant to be used for messages traveling in one
@@ -130,11 +130,14 @@ For this demonstration simply incoming and outgoing.
 
 >>> from envelope.registries import MessageRegistry, HandlerRegistry
 
->>> incoming_messages = MessageRegistry('incoming')
->>> incoming_handlers = HandlerRegistry('incoming')
+>>> INCOMING = 'incoming'
+>>> OUTGOING = 'outgoing'
 
->>> outgoing_messages = MessageRegistry('outgoing')
->>> outgoing_handlers = HandlerRegistry('outgoing')
+>>> incoming_messages = MessageRegistry(INCOMING)
+>>> incoming_handlers = HandlerRegistry(INCOMING)
+
+>>> outgoing_messages = MessageRegistry(OUTGOING)
+>>> outgoing_handlers = HandlerRegistry(OUTGOING)
 
 ```
 
@@ -146,22 +149,25 @@ mode is on.
 
 Envelopes also need a schema, we'll use the default one here.
 
+Note that name has to correspond to the registries above.
+
 ``` python
 
->>> from envelope.envelope import Envelope
->>> from envelope.envelope import EnvelopeSchema
->>> from envelope.envelope import OutgoingEnvelopeSchema
+>>> from envelope.core.envelope import Envelope
+>>> from envelope.core.schemas import EnvelopeSchema
+>>> from envelope.envelopes import OutgoingEnvelopeSchema
+>>> from envelope.decorators import add_envelope
 
->>> class IncomingEnvelope(Envelope):
+>>> @add_envelope
+... class IncomingEnvelope(Envelope):
 ...     schema = EnvelopeSchema
-...     message_registry = incoming_messages
-...     handler_registry = incoming_handlers
+...     name = INCOMING   
 ...
 
->>> class OutgoingEnvelope(Envelope):
+>>> @add_envelope
+... class OutgoingEnvelope(Envelope):
 ...     schema = OutgoingEnvelopeSchema  # Contains state (s) too!
-...     message_registry = outgoing_messages
-...     handler_registry = outgoing_handlers
+...     name = OUTGOING
 ...
 
 ```
@@ -193,7 +199,7 @@ that should be run by the consumer.
 ...     name: str
 ...
 
->>> @add_message('incoming')
+>>> @add_message(INCOMING)
 ... class HelloMessage(AsyncRunnable):
 ...     name='hello'
 ...     schema = HelloSchema
@@ -212,7 +218,7 @@ True
 ...     msg: str
 ...
 
->>> @add_message('outgoing')
+>>> @add_message(OUTGOING)
 ... class HelloResponseMessage(Message):
 ...     name = 'hello_response'  # <- Only needs to be unique per registry
 ...     schema = HelloResponseSchema
@@ -227,7 +233,7 @@ True
 So we have a response and a reply.
 
 Envelopes idea is to inject functionality rather than build custom
-message csonumers. This is done via handlers. 
+message consumers. This is done via handlers. 
 Each message direction can have its own handlers, and the
 handler decides if it should do something with the message.
 
@@ -261,14 +267,8 @@ to reinvent the request/response pattern.
 # Payload will be the package a websocket comsumer receives
 
 >>> from envelope.consumers.websocket import WebsocketConsumer
->>> consumer = WebsocketConsumer(enable_connection_signals=False)
+>>> consumer = WebsocketConsumer(enable_connection_signals=False, incoming_envelope = INCOMING, outgoing_envelope = OUTGOING)
 >>> consumer.channel_name = 'abc'  # This will be set by channels during normal operation
-
-# We'll replace the outgoing and incoming default message registries
-# with the ones we built during this demonstration.
-
->>> consumer.incoming_envelope = IncomingEnvelope
->>> consumer.outgoing_envelope = OutgoingEnvelope
 
 # We use mock to check if the consumer sends something
 # This will of course block real outgoing messages.

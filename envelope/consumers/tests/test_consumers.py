@@ -37,6 +37,11 @@ class ConsumerUnitTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user: AbstractUser = User.objects.create(username="sockety")
+        from envelope.messages import register_messages
+        from envelope.handlers import register_handlers
+
+        register_messages()
+        register_handlers()
 
     def setUp(self):
         self.redis_conn = FakeRedis()
@@ -49,7 +54,7 @@ class ConsumerUnitTests(TestCase):
         return WebsocketConsumer
 
     def _mk_one(self):
-        consumer=self._cut(enable_connection_signals=False)
+        consumer = self._cut(enable_connection_signals=False)
         consumer.last_job = now()
         consumer.channel_name = "abc"
         return consumer
@@ -79,7 +84,8 @@ class ConsumerUnitTests(TestCase):
             self.assertTrue(patched.called)
 
     async def test_send(self):
-        from envelope.envelope import OutgoingWebsocketEnvelope
+        from envelope.envelopes import OutgoingWebsocketEnvelope
+
         consumer = self._mk_one()
         consumer.base_send = AsyncMock()
         data = {"t": "testing.hello", "p": {"greeting": "Hello"}}
@@ -87,12 +93,13 @@ class ConsumerUnitTests(TestCase):
         envelope = OutgoingWebsocketEnvelope(**data)
         await consumer.send(envelope=envelope)
         with self.assertRaises(ValueError):
-            await consumer.send(envelope=envelope,text_data=dumps(data))
+            await consumer.send(envelope=envelope, text_data=dumps(data))
             await consumer.send()
 
     def test_mark_subscribed_left(self):
         from envelope.messages.channels import ChannelSchema
-        subs=ChannelSchema(pk=1, channel_type='user')
+
+        subs = ChannelSchema(pk=1, channel_type="user")
         consumer = self._mk_one()
         consumer.mark_subscribed(subs)
         self.assertIn(subs, consumer.subscriptions)

@@ -4,14 +4,16 @@ from abc import ABC
 from abc import abstractmethod
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Type
+
+from pydantic import BaseModel
 
 from envelope import Error
 from envelope.core.registry import HandlerRegistry
 from envelope.core.registry import MessageRegistry
 from envelope.utils import get_error_type
-from pydantic import BaseModel
-from typing import Type
-
+from envelope.utils import get_handler_registry
+from envelope.utils import get_message_registry
 
 if TYPE_CHECKING:
     from envelope.core.consumer import BaseWebsocketConsumer
@@ -20,10 +22,15 @@ if TYPE_CHECKING:
 
 
 class Envelope(ABC):
-    message_registry: MessageRegistry
-    handler_registry: HandlerRegistry
     data: BaseModel
     schema: Type[BaseModel]
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Name of this envelope type. Should be the same as message registry it needs to handle.
+        """
 
     def __init__(self, _data=None, **kwargs):
         if _data is not None:
@@ -34,7 +41,7 @@ class Envelope(ABC):
     @classmethod
     def parse(cls, text: str):
         data = cls.schema.parse_raw(text)
-        return cls(_data=data, _registry=cls.handler_registry.name)
+        return cls(_data=data)
 
     def unpack(
         self,
@@ -58,13 +65,13 @@ class Envelope(ABC):
         except KeyError:
             raise get_error_type(Error.MSG_TYPE)(
                 mm=mm,
-                registry=self.message_registry.name,
+                registry=self.name,
                 type_name=self.data.t,
             )
         msg = msg_class(
             mm=mm,
             data=self.data.p,
-            _registry=self.message_registry.name,
+            _registry=self.name,
         )
         if consumer and getattr(consumer, "user", None):
             msg.user = consumer.user
@@ -91,21 +98,12 @@ class Envelope(ABC):
         ...
 
     @property
-    @abstractmethod
     def message_registry(self) -> MessageRegistry:
-        ...
+        return get_message_registry(self.name)
 
     @property
-    @abstractmethod
     def handler_registry(self) -> HandlerRegistry:
-        ...
-
-    @classmethod
-    def is_compatible(cls, message, exception=False):
-        result = cls.message_registry.name in message.registries()
-        if not result and exception:
-            raise KeyError(f"{message} is not in registry {cls.message_registry.name}")
-        return result
+        return get_handler_registry(self.name)
 
     async def apply_handlers(self, message, **kwargs):
         await self.handler_registry.apply(message, **kwargs)

@@ -17,7 +17,7 @@ from envelope.utils import SenderUtil
 from envelope.utils import get_error_type
 
 if TYPE_CHECKING:
-    from envelope.messages import Message
+    from envelope.core.message import Message
     from envelope.envelope import Envelope
 
 
@@ -27,7 +27,6 @@ class PubSubChannel(ABC):
     """
 
     consumer_channel: Optional[str]
-    envelope: Envelope
     # Expect transported messages in dict or string format?
     dict_transport: bool = False
     # Override to set another kind of transport
@@ -86,8 +85,7 @@ class PubSubChannel(ABC):
             sender()
 
     def create_sender(self, message: Message) -> SenderUtil:
-        self.envelope.is_compatible(message, exception=True)
-        envelope = self.envelope.pack(message)
+        envelope = message.envelope.pack(message)
         return SenderUtil(
             envelope,
             self.channel_name,

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from unittest.mock import patch
 
 from channels.auth import AuthMiddlewareStack
@@ -7,6 +8,7 @@ from channels.testing import WebsocketCommunicator
 from django.db.transaction import get_connection
 from django.urls import re_path
 from django_rq import get_queue
+from envelope.core.registry import Registry
 from rq import Queue
 from rq import SimpleWorker
 
@@ -17,20 +19,23 @@ from envelope.core.registry import ChannelRegistry
 from envelope.core.registry import HandlerRegistry
 from envelope.core.registry import MessageRegistry
 from envelope.core.schemas import EnvelopeSchema
+from envelope.decorators import add_envelope
 from envelope.decorators import add_message
+from envelope import registries
 
 testing_messages = MessageRegistry("testing")
 testing_handlers = HandlerRegistry("testing")
-testing_channels = ChannelRegistry("testing")
+testing_channels = ChannelRegistry()
+TESTING_NS = "testing"
 
 
+@add_envelope
 class TestingEnvelope(Envelope):
-    message_registry = testing_messages
-    handler_registry = testing_handlers
+    name = TESTING_NS
     schema = EnvelopeSchema
 
 
-@add_message("testing")
+@add_message(TESTING_NS)
 class WebsocketHello(AsyncRunnable):
     name = "testing.hello"
 
@@ -38,7 +43,7 @@ class WebsocketHello(AsyncRunnable):
         pass
 
 
-@add_message("testing")
+@add_message(TESTING_NS)
 class WebsocketWorld(Message):
     name = "testing.world"
 
@@ -109,3 +114,24 @@ class FakeCommit:
         while current_run_on_commit:
             sids, func = current_run_on_commit.pop(0)
             func()
+
+
+# class ResetRegistries:
+#     def __enter__(self):
+#         self.registries = {}
+#         for name, item in registries.__dict__.items():
+#             if isinstance(item, Registry):
+#                 self.registries[name] = deepcopy(item)
+#
+#     def __exit__(self, exc_type, exc_value, traceback):
+#         """
+#         Execute all on_commit hooks and cleanup.
+#         """
+#         for (k, v) in self.registries.items():
+#             registries.__dict__[k] = v
+#         breakpoint()
+# current_run_on_commit = self.connection.run_on_commit
+# self.connection.run_on_commit = []
+# while current_run_on_commit:
+#     sids, func = current_run_on_commit.pop(0)
+#     func()

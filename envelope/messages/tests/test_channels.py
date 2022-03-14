@@ -6,12 +6,15 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
 from django.test import TestCase
 from django_rq import get_queue
+from envelope.apps import ChannelsEnvelopeConfig
 
 from envelope.messages.errors import SubscribeError
 from envelope.testing import mk_communicator
 from envelope.testing import mk_simple_worker
 
 User = get_user_model()
+
+ChannelsEnvelopeConfig.populate_registries()
 
 
 class SubscribeTests(TestCase):
@@ -39,7 +42,7 @@ class SubscribeTests(TestCase):
         )
 
     def _pack(self, msg):
-        from envelope.envelope import IncomingWebsocketEnvelope
+        from envelope.envelopes import IncomingWebsocketEnvelope
 
         return IncomingWebsocketEnvelope.pack(msg)
 
@@ -129,7 +132,7 @@ class LeaveTests(TestCase):
         )
 
     def _pack(self, msg):
-        from envelope.envelope import IncomingWebsocketEnvelope
+        from envelope.envelopes import IncomingWebsocketEnvelope
 
         return IncomingWebsocketEnvelope.pack(msg)
 
@@ -174,8 +177,8 @@ class ListSubscriptionsTests(TestCase):
         return ListSubscriptions(mm={"user_pk": self.user_one.pk})
 
     async def test_list_subscriptions(self):
-        from envelope.envelope import OutgoingWebsocketEnvelope
-        from envelope.envelope import IncomingWebsocketEnvelope
+        from envelope.envelopes import OutgoingWebsocketEnvelope
+        from envelope.envelopes import IncomingWebsocketEnvelope
 
         from envelope.messages.channels import Subscribed
 

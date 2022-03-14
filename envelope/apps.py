@@ -16,10 +16,21 @@ class ChannelsEnvelopeConfig(AppConfig):
         if not isinstance(getattr(settings, "ENVELOPE_TIMESTAMP_QUEUE", None), str):
             logger.warning("ENVELOPE_TIMESTAMP_QUEUE missing from settings")
         from envelope import signals
+
+        ChannelsEnvelopeConfig.populate_registries()
+
+    @staticmethod
+    def populate_registries():
         from envelope import registries
+        from envelope import envelopes
         from envelope.messages import register_messages
 
         register_messages()
+
         from envelope.handlers import register_handlers
 
         register_handlers()
+
+        from envelope.core.registry import validate_registries
+
+        validate_registries()

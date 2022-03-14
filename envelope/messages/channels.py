@@ -9,7 +9,6 @@ from asgiref.sync import async_to_sync
 from pydantic import BaseModel
 from pydantic import validator
 
-from envelope import DEFAULT_CONTEXT_CHANNELS
 from envelope import Error
 from envelope import INTERNAL
 from envelope import WS_INCOMING
@@ -21,7 +20,7 @@ from envelope.core.message import Message
 from envelope.core.message import DeferredJob
 from envelope.signals import channel_subscribed
 from envelope.utils import AppState
-from envelope.utils import get_channel_registry
+from envelope.utils import get_context_channel_registry
 from envelope.utils import get_error_type
 from envelope.utils import websocket_send
 from envelope.core.channels import ContextChannel
@@ -47,7 +46,7 @@ class ChannelSchema(BaseModel):
 
     @validator("channel_type", allow_reuse=True)
     def real_channel_type(cls, v):
-        cr = get_channel_registry(name=DEFAULT_CONTEXT_CHANNELS)
+        cr = get_context_channel_registry()
         v = v.lower()
         if v not in cr:  # pragma: no cover
             raise ValueError(f"'{v}' is not a valid channel")
@@ -66,12 +65,11 @@ class ChannelSubscription(ChannelSchema):
 class ChannelCommand:
     schema = ChannelSchema
     data: ChannelSchema
-    channel_registry = DEFAULT_CONTEXT_CHANNELS
 
     def get_channel(
         self, channel_type: str, pk: int, consumer_name: str
     ) -> ContextChannel:
-        cr = get_channel_registry(name=self.channel_registry)
+        cr = get_context_channel_registry()
         # This may cause errors right?
         return cr[channel_type](pk, consumer_name)
 
@@ -228,7 +226,7 @@ class RecheckChannelSubscriptions(DeferredJob):
         return bool(self.data.subscriptions)
 
     def run_job(self) -> List[ChannelSchema]:
-        registry = get_channel_registry(name=DEFAULT_CONTEXT_CHANNELS)
+        registry = get_context_channel_registry()
         # We don't really know if someone is subscribing due to how channels work, but we won't resubscribe
         results = []  # The returned data is meant for unittesting and similar
         for channel_info in self.data.subscriptions:
