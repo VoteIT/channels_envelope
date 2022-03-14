@@ -350,7 +350,7 @@ class AppState(UserList):
         assert (
             WS_OUTGOING in item.registries()
         ), f"{item} is not registered as an outgoing websocket message"
-
+        item.validate()  # In case it wasn't done before
         super().append(
             self.envelope_type(
                 t=item.name,
