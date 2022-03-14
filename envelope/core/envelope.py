@@ -79,6 +79,7 @@ class Envelope(ABC):
 
     @classmethod
     def pack(cls, message: Message) -> Envelope:
+        message.validate()  # In case it wasn't done before
         kwargs = dict(t=message.name, **message.mm.envelope_data())
         if message.data is not None:
             kwargs["p"] = message.data
