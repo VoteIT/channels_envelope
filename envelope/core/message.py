@@ -77,6 +77,10 @@ class Message(MessageStates, Generic[S], ABC):
                 _registry in self.registries()
             ), "Specified registry not valid for this message type"
             self.mm.registry = _registry
+        if self.mm.registry is None and len(self.registries()) == 1:
+            for rname in self.registries():
+                # If there's only one registry, it's quite unproblematic to attach it here
+                self.mm.registry = rname
         if _orm is not None:
             assert data is None, "Can only specify data or _orm"
             assert not kwargs, "kwargs and _orm isn't supported together"
