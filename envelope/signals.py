@@ -24,4 +24,4 @@ connection_terminated = Signal()
 #   context     The instance (object) this channel is for
 #   user        object or None
 #   app_state   Additional data passed along as a result of the subscribe command
-channel_subscribed = Signal(providing_args=["context", "user", "app_state"])
+channel_subscribed = Signal()

@@ -6,7 +6,6 @@ from logging import getLogger
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
-from typing import Union
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -340,19 +339,16 @@ class AppState(UserList):
     Attach several messages to a subscribed response. It's built for websocket application states.
     """
 
-    @cached_property
-    def envelope_type(self) -> Type[Envelope]:
-        reg = get_envelope_registry()
-        return reg[WS_OUTGOING]
-
     def append(self, item: Message) -> None:
-        """Insert outgoing message into envelope 👅"""
+        """
+        Append an outgoing message to another message. Used by pubsub and similar.
+        """
         assert (
             WS_OUTGOING in item.registries()
         ), f"{item} is not registered as an outgoing websocket message"
         item.validate()  # In case it wasn't done before
         super().append(
-            self.envelope_type(
+            dict(
                 t=item.name,
                 p=item.data,
             )
@@ -368,7 +364,7 @@ class AppState(UserList):
         Insert outgoing message from instance, using DRF serializer and message_class
         """
         data = serializer_class(instance).data
-        self.append(message_class(**data))
+        self.append(message_class(data=data))
 
     def append_from_queryset(
         self,

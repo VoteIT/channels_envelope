@@ -66,7 +66,8 @@ class PubSubChannel(ABC):
         return cls.__registries
 
     async def subscribe(self):
-        assert self.consumer_channel
+        if not self.consumer_channel:
+            raise ValueError("No consumer_channel specified")
         await self.channel_layer.group_add(self.channel_name, self.consumer_channel)
 
     async def leave(self):

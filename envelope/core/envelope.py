@@ -79,6 +79,9 @@ class Envelope(ABC):
 
     @classmethod
     def pack(cls, message: Message) -> Envelope:
+        """
+        Pack (or insert) message into an envelope 👅
+        """
         message.validate()  # In case it wasn't done before
         kwargs = dict(t=message.name, **message.mm.envelope_data())
         if message.data is not None:
@@ -86,9 +89,15 @@ class Envelope(ABC):
         return cls(**kwargs)
 
     def as_text_transport(self, channels_type: str) -> dict:
+        """
+        Websocket consumers like to receive text to simply pass along.
+        """
         return {"text_data": self.data.json(), "type": channels_type}
 
     def as_dict_transport(self, channels_type: str):
+        """
+        Things sent internally within channels should be dict-like.
+        """
         data = self.data.dict()
         data["type"] = channels_type
         return data

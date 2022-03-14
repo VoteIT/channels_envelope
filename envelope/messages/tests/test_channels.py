@@ -4,6 +4,7 @@ from asgiref.sync import async_to_sync
 from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
+from django.dispatch import receiver
 from django.test import TestCase
 from django_rq import get_queue
 from envelope.apps import ChannelsEnvelopeConfig
@@ -38,7 +39,9 @@ class SubscribeTests(TestCase):
         from envelope.messages.channels import Subscribe
 
         return Subscribe(
-            mm={"user_pk": self.user_one.pk}, channel_type="user", pk=self.user_one.pk
+            mm={"user_pk": self.user_one.pk},
+            channel_type="user",
+            pk=self.user_one.pk,
         )
 
     def _pack(self, msg):
@@ -109,6 +112,22 @@ class SubscribeTests(TestCase):
             },
             response,
         )
+
+    def test_appstruct_attached(self):
+        from envelope.signals import channel_subscribed
+        from envelope.messages.testing import Pleasantry
+
+        @receiver(channel_subscribed)
+        def attach_hello(app_state, **kwargs):
+            greeting = Pleasantry(greeting="Hi there")
+            app_state.append(greeting)
+
+        msg = self._mk_msg()
+        msg.mm.consumer_name = "abc"
+        msg.validate()
+        response = msg.run_job()
+        self.assertEqual(1, len(response.data.app_state))
+        self.assertEqual("Hi there", response.data.app_state[0].p["greeting"])
 
 
 class LeaveTests(TestCase):
