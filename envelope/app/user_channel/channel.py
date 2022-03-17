@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.utils.functional import classproperty
 
 from envelope.core.channels import ContextChannel
 from envelope.decorators import add_context_channel
@@ -6,9 +7,16 @@ from envelope.decorators import add_context_channel
 
 @add_context_channel
 class UserChannel(ContextChannel):
-    model = get_user_model()
     permission = None
     name = "user"
 
     def allow_subscribe(self, user):
         return user.pk and user.pk == self.pk
+
+    @classproperty
+    def model(cls):
+        """
+        In case the application that contains a custom user model imports this too,
+        this at least help against odd import errors.
+        """
+        return get_user_model()
