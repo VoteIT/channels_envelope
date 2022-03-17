@@ -62,12 +62,12 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         self.user = await self.get_user()
         if self.user is None:
             # FIXME: Allow anon connections?
-            logger.debug("No user found closing connection")
+            self.logger.debug("No user found closing connection")
             raise DenyConnection()
         self.user_pk = self.user.pk
-        logger.debug("Connection for user: %s", self.user)
+        self.logger.debug("Connection for user: %s", self.user)
         await self.accept()
-        logger.debug(
+        self.logger.debug(
             "Connection accepted for user %s (%s) with lang %s",
             self.user,
             self.user.pk,
@@ -109,6 +109,7 @@ class WebsocketConsumer(BaseWebsocketConsumer):
     def update_connection(self):
         if self.connection_update_interval is not None:
             if now() - self.last_job > self.connection_update_interval:
+                self.logger.debug("%s queued connection update", self.channel_name)
                 return self.timestamp_queue.enqueue(
                     mark_connection_action,
                     action_at=now(),
@@ -132,9 +133,10 @@ class WebsocketConsumer(BaseWebsocketConsumer):
             except ErrorMessage as error:
                 return await self.send_ws_error(error)
         else:  # pragma: no cover
-            logger.debug("Ignoring binary data")
+            self.logger.debug("Ignoring binary data")
             return
         self.last_received = now()
+        self.logger.debug("Websocket %s received %s", self.channel_name, message.name)
         try:
             await self.handle_message(message)
         # FIXME Other recoverable errors?
@@ -149,6 +151,7 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         self.update_connection()
 
     async def send_ws_error(self, error: ErrorMessage):
+        self.logger.debug("%s sending error %s", self.channel_name, error.name)
         self.last_error = now()
         if isinstance(error, ErrorMessage):
             if error.mm.registry != ERRORS:
@@ -170,6 +173,17 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         if state:
             envelope.data.s = state
         # JSON dumps methods should be set on the envelope to make them compatible with more types
+        if state:
+            self.logger.debug(
+                "%s sending ws message %s - state: %s",
+                self.channel_name,
+                message.name,
+                state,
+            )
+        else:
+            self.logger.debug(
+                "%s sending ws message %s", self.channel_name, message.name
+            )
         await self.send(envelope=envelope)
 
     async def websocket_send(self, event: dict):
@@ -184,7 +198,16 @@ class WebsocketConsumer(BaseWebsocketConsumer):
             envelope = self.outgoing_envelope.parse(event["text_data"])
             msg = envelope.unpack(consumer=self)
             msg.validate()  # Die here, application error not caused by the user
+            self.logger.debug(
+                "%s sending from transport websocket_send with run handlers: %s",
+                self.channel_name,
+                msg.name,
+            )
             await self.handle_message(msg)
+        else:
+            self.logger.debug(
+                "%s sending text via transport websocket_send", self.channel_name
+            )
         self.last_sent = now()
         await self.send(text_data=event["text_data"])
 
@@ -200,7 +223,16 @@ class WebsocketConsumer(BaseWebsocketConsumer):
             envelope = self.error_envelope.parse(event["text_data"])
             msg = envelope.unpack(consumer=self)
             msg.validate()  # Die here, application error not caused by the user
+            self.logger.debug(
+                "%s sending from transport ws_error_send with run handlers: %s",
+                self.channel_name,
+                msg.name,
+            )
             await self.handle_message(msg)
+        else:
+            self.logger.debug(
+                "%s sending error text via transport ws_error_send", self.channel_name
+            )
         self.last_error = now()
         self.last_sent = now()
         await self.send(text_data=event["text_data"])
@@ -213,6 +245,9 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         msg = envelope.unpack(consumer=self)
         # Die here, application error not caused by the user
         msg.validate()
+        self.logger.debug(
+            "%s got %s from transport internal_msg", self.channel_name, msg.name
+        )
         # Should we catch errors from handle message?
         # These are internal messages so any error should be from already validated
         # data sent by the application - i.e. our fault.

@@ -21,6 +21,8 @@ from envelope.queues import get_connection_queue
 from envelope.queues import get_timestamp_queue
 from envelope.utils import get_handler_registry
 
+logger = getLogger(__name__)
+
 
 class BaseWebsocketConsumer(AsyncWebsocketConsumer, ABC):
 
@@ -53,7 +55,7 @@ class BaseWebsocketConsumer(AsyncWebsocketConsumer, ABC):
     connect_signal_job = None
     close_signal_job = None
     # Logger, so we can override it
-    logger: Logger = getLogger(__name__)
+    logger: Logger = logger
     # Queues for RQ tasks
     connection_queue: Queue
     timestamp_queue: Queue
@@ -64,7 +66,6 @@ class BaseWebsocketConsumer(AsyncWebsocketConsumer, ABC):
         enable_connection_signals=True,
         connect_signal_job=None,
         close_signal_job=None,
-        internal_envelope=None,
         logger: Logger = None,
         connection_queue: Union[str, Queue] = None,
         timestamp_queue: Union[str, Queue] = None,
