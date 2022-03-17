@@ -1,3 +1,4 @@
+from collections import UserString
 from typing import List
 from typing import Optional
 
@@ -77,6 +78,27 @@ class NotFoundError(ErrorMessage[NotFoundSchema]):
 
 class UnauthorizedSchema(NotFoundSchema):
     permission: Optional[str]
+
+    @validator("permission", pre=True)
+    def adjust_user_str(cls, v):
+        """
+        Make sure user strings work too
+
+        >>> from collections import UserString
+        >>> class MyString(UserString):
+        ...     ...
+        ...
+        >>> mine = MyString("bla")
+        >>> mine.__class__.__name__
+        'MyString'
+
+        >>> new_str = UnauthorizedSchema.adjust_user_str(mine)
+        >>> new_str.__class__.__name__
+        'str'
+        """
+        if isinstance(v, UserString):
+            return str(v)
+        return v
 
 
 @add_message(ERRORS)
