@@ -185,7 +185,7 @@ class DeferredJob(Message, ABC):
     data: BaseModel  # But really the schema
     should_run: bool = True  # Mark as false to abort run
 
-    def __init__(self, queue: Union[str, Queue] = None, **kwargs):
+    def __init__(self, *, queue: Union[str, Queue] = None, **kwargs):
         if queue is not None:
             if isinstance(queue, str):
                 self.queue = queue
