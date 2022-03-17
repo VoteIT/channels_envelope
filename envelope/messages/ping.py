@@ -9,14 +9,14 @@ from envelope.core.message import AsyncRunnable
 from envelope.core.message import Message
 
 if TYPE_CHECKING:
-    from envelope.consumers.websocket import EnvelopeWebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 
 @add_message(WS_INCOMING, WS_OUTGOING)
 class Ping(AsyncRunnable):
     name = "s.ping"
 
-    async def run(self, consumer: EnvelopeWebsocketConsumer = None, **kwargs):
+    async def run(self, *, consumer: WebsocketConsumer, **kwargs):
         assert consumer
         if self.mm.registry != WS_OUTGOING:
             response = Pong.from_message(self)

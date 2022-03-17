@@ -164,7 +164,7 @@ class AsyncRunnable(Message, ABC):
     """
 
     @abstractmethod
-    async def run(self, consumer=None, **kwargs):
+    async def run(self, *, consumer, **kwargs):
         pass
 
 
