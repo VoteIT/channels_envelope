@@ -78,6 +78,7 @@ class WebsocketConsumer(BaseWebsocketConsumer):
             # since the sync calls to db aren't great to mix with async code.
             # Currently channels testing doesn't work very well with database_sync_to_async either since
             # we'll have problems with new threads etc
+            self.last_job = now()
             return self.connection_queue.enqueue(
                 self.connect_signal_job,
                 user_pk=self.user_pk,
@@ -108,7 +109,10 @@ class WebsocketConsumer(BaseWebsocketConsumer):
 
     def update_connection(self):
         if self.connection_update_interval is not None:
-            if now() - self.last_job > self.connection_update_interval:
+            if (
+                self.last_job is None
+                or now() - self.last_job > self.connection_update_interval
+            ):
                 self.logger.debug("%s queued connection update", self.channel_name)
                 return self.timestamp_queue.enqueue(
                     mark_connection_action,
