@@ -2,4 +2,6 @@ include LICENSE
 include README.md
 recursive-include envelope *
 exclude manage.py
-exclude dev_settings
+prune dev_settings
+global-exclude *.py[cod]
+global-exclude test_*
