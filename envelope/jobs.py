@@ -147,7 +147,10 @@ def run_job(msg: DeferredJob, enqueued_at: datetime = None):
         # We could've used enqueued_at from RQ if it had supported TZ :(
         if enqueued_at is None:
             enqueued_at = now()
-        if msg.connection.last_action < enqueued_at:
+        if (
+            msg.connection.last_action is None
+            or msg.connection.last_action < enqueued_at
+        ):
             msg.connection.last_action = enqueued_at
             msg.connection.save()
     msg.validate()  # We already know this is valid since it has passed the consumers handle func
