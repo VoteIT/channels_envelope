@@ -163,6 +163,7 @@ class SenderUtil:
 
 def websocket_send(
     message: Message,
+    *,
     channel_name: str = None,
     state: Optional[str] = None,
     on_commit: bool = True,
@@ -178,7 +179,7 @@ def websocket_send(
 
     This method can send straight away regardless of transactions
     >>> with mock.patch.object(channel_layer, 'send') as mock_send:
-    ...     websocket_send(msg, 'a-channel', on_commit=False)
+    ...     websocket_send(msg, channel_name='a-channel', on_commit=False)
     ...     mock_send.called
     True
 
@@ -186,7 +187,7 @@ def websocket_send(
     >>> from django.db import transaction
     >>> with mock.patch.object(channel_layer, 'send') as mock_send:
     ...     with transaction.atomic():
-    ...         websocket_send(msg, 'a-channel')
+    ...         websocket_send(msg, channel_name='a-channel')
     ...         pre_commit_called = mock_send.called
     ...     post_commit_called = mock_send.called
     ...
@@ -235,6 +236,7 @@ def websocket_send(
 
 def internal_send(
     message: Message,
+    *,
     channel_name: str = None,
     state: Optional[str] = None,
     on_commit: bool = True,
@@ -249,7 +251,7 @@ def internal_send(
 
     This method can send straight away regardless of transactions
     >>> with mock.patch.object(channel_layer, 'send') as mock_send:
-    ...     internal_send(msg, 'a-channel', on_commit=False)
+    ...     internal_send(msg, channel_name='a-channel', on_commit=False)
     ...     mock_send.called
     True
 
@@ -257,7 +259,7 @@ def internal_send(
     >>> from django.db import transaction
     >>> with mock.patch.object(channel_layer, 'send') as mock_send:
     ...     with transaction.atomic():
-    ...         internal_send(msg, 'a-channel')
+    ...         internal_send(msg, channel_name='a-channel')
     ...         pre_commit_called = mock_send.called
     ...     post_commit_called = mock_send.called
     ...

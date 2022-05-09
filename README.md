@@ -398,7 +398,7 @@ True
 ...         user = User.objects.get(username=self.data.username)
 ...         # To use _orm we need orm mode enabled for the schema the response uses. See below
 ...         response = UserData.from_message(self, _orm=user)
-...         websocket_send(response, self.mm.consumer_name, state=self.SUCCESS)
+...         websocket_send(response, state=self.SUCCESS)
 ...         return response  # To make unittesting easier!
 
 
@@ -481,7 +481,7 @@ so let's just add a superuser to test against.
 ...                 setattr(user, k, v)
 ...             user.save()
 ...         response = UserData.from_message(self, _orm=user)
-...         websocket_send(response, self.mm.consumer_name, state=self.SUCCESS)
+...         websocket_send(response, state=self.SUCCESS)
 ...         return response
 
 A difference here is that we need to specify user to make this work.

@@ -118,9 +118,7 @@ class Subscribe(ChannelCommand, DeferredJob):
                 app_state=app_state,
                 **self.data.dict(),
             )
-            websocket_send(
-                msg, self.mm.consumer_name, state=self.SUCCESS, run_handlers=True
-            )
+            websocket_send(msg, state=self.SUCCESS, run_handlers=True)
             return msg
         else:
             raise get_error_type(Error.SUBSCRIBE).from_message(
@@ -243,8 +241,6 @@ class RecheckChannelSubscriptions(DeferredJob):
                     channel_type=channel_info.channel_type,
                     pk=channel_info.pk,
                 )
-                websocket_send(
-                    msg, self.mm.consumer_name, state=self.SUCCESS, run_handlers=True
-                )
+                websocket_send(msg, state=self.SUCCESS, run_handlers=True)
                 results.append(channel_info)
         return results
