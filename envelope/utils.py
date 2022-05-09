@@ -235,7 +235,7 @@ def websocket_send(
 
 def internal_send(
     message: Message,
-    channel_name: str,
+    channel_name: str = None,
     state: Optional[str] = None,
     on_commit: bool = True,
     group: bool = False,
@@ -267,6 +267,12 @@ def internal_send(
     True
     """
     assert isinstance(message, get_message_class())
+    if channel_name is None:
+        assert message.mm.consumer_name
+        assert (
+            not group
+        ), "Specify channel_name if you'd like to send the message to a group"
+        channel_name = message.mm.consumer_name
     try:
         message.validate()
     except ValidationError as exc:
