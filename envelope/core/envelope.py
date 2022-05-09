@@ -32,7 +32,7 @@ class Envelope(ABC):
         Name of this envelope type. Should be the same as message registry it needs to handle.
         """
 
-    def __init__(self, _data=None, **kwargs):
+    def __init__(self, *, _data=None, **kwargs):
         if _data is not None:
             self.data = _data
         else:

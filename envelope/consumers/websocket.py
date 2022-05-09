@@ -41,13 +41,13 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         outgoing_envelope=WS_OUTGOING,
         error_envelope=ERRORS,
         internal_envelope=INTERNAL,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             enable_connection_signals=enable_connection_signals,
             connect_signal_job=connect_signal_job,
             close_signal_job=close_signal_job,
-            **kwargs
+            **kwargs,
         )
         # Set envelope classes
         envelopes = get_envelope_registry()
@@ -245,7 +245,7 @@ class WebsocketConsumer(BaseWebsocketConsumer):
         """
         Handle incoming internal message
         """
-        envelope = self.internal_envelope(self, **event)
+        envelope = self.internal_envelope(consumer=self, **event)
         msg = envelope.unpack(consumer=self)
         # Die here, application error not caused by the user
         msg.validate()

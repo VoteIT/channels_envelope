@@ -18,6 +18,8 @@ from pydantic import BaseModel
 from rq import Queue
 from rq import SimpleWorker
 
+from envelope.testing import TestingEnvelope
+from envelope.testing import WebsocketHello
 from envelope.testing import mk_communicator
 
 if TYPE_CHECKING:
@@ -105,6 +107,14 @@ class ConsumerUnitTests(TestCase):
         self.assertIn(subs, consumer.subscriptions)
         consumer.mark_left(subs)
         self.assertNotIn(subs, consumer.subscriptions)
+
+    async def test_internal_msg(self):
+        consumer = self._mk_one()
+        consumer.internal_envelope = TestingEnvelope
+        # WebsocketHello
+        await consumer.internal_msg(
+            {"i": 10, "l": "sv", "p": {}, "t": WebsocketHello.name}
+        )
 
 
 @override_settings(CHANNEL_LAYERS=_channel_layers_setting)
