@@ -144,6 +144,7 @@ LOGGING = {
             "format": "%(message)s",
             "datefmt": "%H:%M:%S",
             "timestamp": True,
+            "class": "pythonjsonlogger.jsonlogger.JsonFormatter",
         },
     },
     "handlers": {
