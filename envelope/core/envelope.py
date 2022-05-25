@@ -6,11 +6,10 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
 
-from pydantic import BaseModel
-
 from envelope import Error
 from envelope.core.registry import HandlerRegistry
 from envelope.core.registry import MessageRegistry
+from envelope.core.schemas import EnvelopeSchema
 from envelope.utils import get_error_type
 from envelope.utils import get_handler_registry
 from envelope.utils import get_message_registry
@@ -22,8 +21,7 @@ if TYPE_CHECKING:
 
 
 class Envelope(ABC):
-    data: BaseModel
-    schema: Type[BaseModel]
+    data: EnvelopeSchema
 
     @property
     @abstractmethod
@@ -31,6 +29,11 @@ class Envelope(ABC):
         """
         Name of this envelope type. Should be the same as message registry it needs to handle.
         """
+
+    @property
+    @abstractmethod
+    def schema(self) -> Type[EnvelopeSchema]:
+        ...
 
     def __init__(self, *, _data=None, **kwargs):
         if _data is not None:
@@ -91,8 +94,15 @@ class Envelope(ABC):
     def as_text_transport(self, channels_type: str) -> dict:
         """
         Websocket consumers like to receive text to simply pass along.
+        Add some metadata to payload so message doesn't have to be unpacked to check what it is.
         """
-        return {"text_data": self.data.json(), "type": channels_type}
+        return {
+            "text_data": self.data.json(),
+            "type": channels_type,
+            "i": self.data.i,
+            "t": self.data.t,
+            "s": getattr(self.data, "s", None),
+        }
 
     def as_dict_transport(self, channels_type: str):
         """
@@ -101,11 +111,6 @@ class Envelope(ABC):
         data = self.data.dict()
         data["type"] = channels_type
         return data
-
-    @property
-    @abstractmethod
-    def schema(self) -> Type[BaseModel]:
-        ...
 
     @property
     def message_registry(self) -> MessageRegistry:

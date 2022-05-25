@@ -140,6 +140,11 @@ LOGGING = {
             "format": "%(asctime)s %(message)s",
             "datefmt": "%H:%M:%S",
         },
+        "json": {
+            "format": "%(message)s",
+            "datefmt": "%H:%M:%S",
+            "timestamp": True,
+        },
     },
     "handlers": {
         "console": {
@@ -150,6 +155,11 @@ LOGGING = {
             "class": "rq.utils.ColorizingStreamHandler",
             "formatter": "rq_console",
             "exclude": ["%(asctime)s"],
+        },
+        "json": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "json",
         },
     },
     "root": {
@@ -163,6 +173,11 @@ LOGGING = {
             "propagate": False,
         },
         "envelope": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "envelope.consumers.websocket.event": {
+            "handlers": ["json"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
         "rq.worker": {
             "handlers": [
                 "rq_console",
