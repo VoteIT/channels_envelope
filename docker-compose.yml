@@ -7,13 +7,10 @@ services:
       - ./volumes/redis:/data
     ports:
       - "16379:6379"
-  rqdash:
-    image: eoranged/rq-dashboard
+  rqmonitor:
+    image: pranavgupta1234/rqmonitor
     environment:
-      RQ_DASHBOARD_REDIS_URL: redis://redis:16379/9
-      RQ_DASHBOARD_USERNAME: rq
-      RQ_DASHBOARD_PASSWORD: rq
+      RQ_MONITOR_REDIS_URL: redis://redis:6379
+      RQ_MONITOR_DEBUG: 1
     ports:
-      - "9181:9181"
-    restart: "no"
-    stop_grace_period: 2s
+      - "8899:8899"
