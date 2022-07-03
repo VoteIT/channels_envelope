@@ -13,9 +13,8 @@ from django.contrib.auth.models import AbstractUser
 from django.db import transaction
 from django.db.models import Model
 from django.db.models import QuerySet
-from django.utils.functional import cached_property
-from envelope import INTERNAL
 
+from envelope import INTERNAL
 from envelope import WS_OUTGOING
 from pydantic import ValidationError
 from envelope import ERRORS
