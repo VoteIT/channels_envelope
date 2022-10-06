@@ -7,13 +7,10 @@ from envelope.models import Connection
 
 class Command(BaseCommand):
 
-    help = "Sync organisations with consumer endpoint"
-
-    def add_arguments(self, parser):
-        pass
+    help = "Mark connections with no action as awol"
 
     def handle(self, *args, **options):
-        probably_awol_ts = now() - timedelta(minutes=10)
+        probably_awol_ts = now() - timedelta(minutes=20)
         qs = Connection.objects.filter(
             online=True,
             last_action__lt=probably_awol_ts,
