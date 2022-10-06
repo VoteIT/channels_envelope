@@ -15,7 +15,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
@@ -95,6 +94,14 @@ DATABASES = {
             "NAME": BASE_DIR / "db_test.sqlite3",
         },
     }
+    # "default": {
+    #     "ENGINE": "django.db.backends.postgresql",
+    #     "NAME": "postgres",
+    #     "USER": "postgres",
+    #     # "PASSWORD": os.getenv("POSTGRES_PASSWORD", "indeedee"),
+    #     "HOST": "localhost",
+    #     "PORT": 15432,
+    # }
 }
 
 RQ_QUEUES = {
