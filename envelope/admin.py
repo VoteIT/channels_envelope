@@ -13,8 +13,11 @@ class ConnectionAdmin(admin.ModelAdmin):
         "offline_at",
     )
     list_filter = (
-        "user",
         "online",
         "awol",
     )
-    search_fields = ("user",)
+    search_fields = (
+        "user__first_name",
+        "user__last_name",
+        "user__username",
+    )
