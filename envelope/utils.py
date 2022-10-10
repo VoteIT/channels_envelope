@@ -175,6 +175,8 @@ class SenderUtil:
 
     async def async_send(self):
         packed = self.msg.pack()
+        if self.state:
+            packed.data.s = self.state
         if self.as_dict:
             payload = packed.as_dict_transport(self.transport)
             # payload = self.envelope.as_dict_transport(self.transport)
