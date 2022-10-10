@@ -59,6 +59,7 @@ class TransactionSender:
         self.data = []
 
     def __call__(self):
+        self.batch_messages()
         for x in self:
             x()
 
