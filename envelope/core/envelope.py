@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 class Envelope(ABC):
     data: EnvelopeSchema
+    transport: Optional[str] = None
 
     @property
     @abstractmethod

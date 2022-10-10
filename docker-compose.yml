@@ -14,3 +14,11 @@ services:
       RQ_MONITOR_DEBUG: 1
     ports:
       - "8899:8899"
+#  db:
+#    image: postgres:14
+#    environment:
+#      POSTGRES_HOST_AUTH_METHOD: trust
+#    volumes:
+#      - ./volumes/postgres:/var/lib/postgresql/data
+#    ports:
+#      - "15432:5432"

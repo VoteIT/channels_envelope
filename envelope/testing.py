@@ -33,6 +33,7 @@ TESTING_NS = "testing"
 class TestingEnvelope(Envelope):
     name = TESTING_NS
     schema = EnvelopeSchema
+    transport = "testing"
 
 
 @add_message(TESTING_NS)

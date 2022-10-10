@@ -148,6 +148,9 @@ class Message(MessageStates, Generic[S], ABC):
             raise KeyError(f"No registry called {self.mm.registry}")
         return reg[self.mm.registry]
 
+    def pack(self) -> Envelope:
+        return self.envelope.pack(self)
+
 
 class ErrorMessage(Message, Generic[S], Exception, ABC):
     def __init__(self, **kwargs):

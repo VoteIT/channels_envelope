@@ -13,6 +13,7 @@ from django.test import TestCase
 from django.test import override_settings
 from django.utils.timezone import now
 from django_rq import get_queue
+from django_rq.utils import get_jobs
 from fakeredis import FakeRedis
 from pydantic import BaseModel
 from rq import Queue
@@ -131,13 +132,10 @@ class ConsumerCommunicatorTests(TestCase):
         self.queue = Queue(connection=self.redis_conn)
 
     def tearDown(self):
-        super().tearDown()
-
         if self.communicator is not None:
             async_to_sync(self.communicator.disconnect)()
-        # In case we left anything bad behind...
-        queue = get_queue()
-        queue.empty()
+        self.queue.empty()
+        super().tearDown()
 
     @property
     def _cut(self):
@@ -171,43 +169,18 @@ class ConsumerCommunicatorTests(TestCase):
 
         return Incoming(queue=self.queue, mm={"user_pk": self.user.pk}, username="jane")
 
-    def test_connection_signal(self):
-        from envelope.signals import client_connect
+    async def test_connect_job_queued(self):
+        self.communicator = await mk_communicator(self.user, queue=self.queue)
+        ids = self.queue.get_job_ids()
+        first_job = self.queue.fetch_job(ids[0])
+        self.assertEqual("signal_websocket_connect", first_job.func.__name__)
 
-        @receiver(client_connect)
-        def my_listener(user, **kw):
-            user.username = "hello_world"
-            user.save()
-
-        async_to_sync(mk_communicator)(self.user, queue=self.queue)
-
-        self.assertEqual("sockety", self.user.username)
-        worker = self._mk_worker()
-        completed = worker.work(burst=True)
-        self.assertTrue(completed)
-        self.user.refresh_from_db()
-        self.assertEqual("hello_world", self.user.username)
-
-    def test_close_signal(self):
-        from envelope.signals import client_close
-
-        @receiver(client_close)
-        def my_listener(user, close_code, **kw):
-            user.username = "closed_%s" % close_code
-            user.save()
-
-        async def run_communicator():
-            self.communicator = await mk_communicator(self.user, queue=self.queue)
-            await self.communicator.disconnect(code=1001)
-
-        async_to_sync(run_communicator)()
-
-        self.assertEqual("sockety", self.user.username)
-        worker = self._mk_worker()
-        completed = worker.work(burst=True)
-        self.assertTrue(completed)
-        self.user.refresh_from_db()
-        self.assertEqual("closed_1001", self.user.username)
+    async def test_close_job_queued(self):
+        self.communicator = await mk_communicator(self.user, queue=self.queue)
+        await self.communicator.disconnect(code=1001)
+        ids = self.queue.get_job_ids()
+        last_job = self.queue.fetch_job(ids[-1])
+        self.assertEqual("signal_websocket_close", last_job.func.__name__)
 
     async def test_connection_anon_user(self):
         with self.assertRaises(AssertionError):

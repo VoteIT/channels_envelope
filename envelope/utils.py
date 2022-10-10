@@ -13,16 +13,17 @@ from django.contrib.auth.models import AbstractUser
 from django.db import transaction
 from django.db.models import Model
 from django.db.models import QuerySet
+from django.db.transaction import TransactionManagementError
+from django.db.transaction import get_connection
 
 from envelope import INTERNAL
 from envelope import WS_OUTGOING
 from pydantic import ValidationError
 from envelope import ERRORS
 from envelope import Error
-from envelope import INTERNAL_TRANSPORT
-from envelope import WS_SEND_ERROR_TRANSPORT
 from envelope import WS_SEND_TRANSPORT
 from envelope.models import Connection
+from envelope.models import TransactionSender
 from envelope.signals import connection_terminated
 
 if TYPE_CHECKING:
@@ -121,24 +122,33 @@ def get_envelope_registry() -> EnvelopeRegistry:
 class SenderUtil:
     """
     Takes care of sending data to channels.
-    Made callable so it can be added to the on_commit hook in django.
+    Made callable, so it can be added to the on_commit hook in django.
     """
 
     # FIXME: Allow channel layer specification?
     def __init__(
         self,
-        envelope: Envelope,
+        # envelope: Envelope,
+        msg: Message,
+        *,
         channel_name: str,
         group: bool = False,
-        transport: str = None,
         as_dict: bool = False,
         run_handlers: Optional[bool] = None,
+        state: Optional[str] = None,
     ):
-        self.envelope = envelope
+        # self.envelope = envelope
+        assert isinstance(msg, get_message_class())
+        self.msg = msg
+        self.state = state
+        # Check that things work
+        if self.msg.envelope is None:
+            # Will probably raise another exception before this
+            raise TypeError(f"{self.msg} doesn't seem to have envelope set")
         self.channel_name = channel_name
         self.group = group
-        assert transport
-        self.transport = transport
+        self.transport = msg.envelope.transport
+        assert self.transport
         # Send as dict or text?
         self.as_dict = as_dict
         # Should the consumer run handlers?
@@ -147,11 +157,30 @@ class SenderUtil:
     def __call__(self):
         async_to_sync(self.async_send)()
 
+    @property
+    def group_key(self):
+        """
+        Everything that makes message groupable
+        """
+        return f"{self.msg.name}{self.channel_name}{self.state and self.state or ''}{int(self.group)}{int(self.as_dict)}{self.transport}"
+
+    @property
+    def batch(self) -> bool:
+        # FIXME
+        from envelope.messages.common import Batch
+
+        return self.transport in (WS_SEND_TRANSPORT, "testing") and not isinstance(
+            self.msg, Batch
+        )
+
     async def async_send(self):
+        packed = self.msg.pack()
         if self.as_dict:
-            payload = self.envelope.as_dict_transport(self.transport)
+            payload = packed.as_dict_transport(self.transport)
+            # payload = self.envelope.as_dict_transport(self.transport)
         else:
-            payload = self.envelope.as_text_transport(self.transport)
+            payload = packed.as_text_transport(self.transport)
+            # payload = self.envelope.as_text_transport(self.transport)
         if self.run_handlers is not None:
             payload["run_handlers"] = self.run_handlers
         if self.group:
@@ -213,22 +242,16 @@ def websocket_send(
     if message.mm.registry is None:
         logger.debug(f"{message} lacks registry")
         message.mm.registry = WS_OUTGOING
-    reg = get_envelope_registry()
-    envelope_type = reg[WS_OUTGOING]
-    envelope = envelope_type.pack(message)
-    if state:
-        envelope.data.s = state
     sender = SenderUtil(
-        envelope,
-        channel_name,
+        message,
+        channel_name=channel_name,
         group=group,
-        transport=WS_SEND_TRANSPORT,
         run_handlers=run_handlers,
+        state=state,
     )
     if on_commit:
-        # FIXME: Option to disable commit?
-        # if on_commit and not self.is_on_commit_disabled:
-        transaction.on_commit(sender)
+        txn_sender = get_or_create_txn_sender()
+        txn_sender.add(sender)
     else:
         sender()
 
@@ -285,13 +308,17 @@ def internal_send(
     if message.mm.registry is None:
         logger.debug(f"{message} lacks registry")
         message.mm.registry = INTERNAL
-    reg = get_envelope_registry()
-    envelope_type = reg[INTERNAL]
-    envelope = envelope_type.pack(message)
-    if state:
-        envelope.data.s = state
+    # reg = get_envelope_registry()
+    # envelope_type = reg[INTERNAL]
+    # envelope = envelope_type.pack(message)
+    # if state:
+    #    envelope.data.s = state
     sender = SenderUtil(
-        envelope, channel_name, group=group, transport=INTERNAL_TRANSPORT, as_dict=True
+        message,
+        channel_name=channel_name,
+        group=group,
+        as_dict=True,
+        state=state,
     )
     if on_commit:
         # FIXME: Option to disable commit?
@@ -321,9 +348,8 @@ def websocket_send_error(
     envelope = envelope_type.pack(error)
     sender = SenderUtil(
         envelope,
-        channel_name,
+        channel_name=channel_name,
         group=group,
-        transport=WS_SEND_ERROR_TRANSPORT,
         run_handlers=run_handlers,
     )
     sender()
@@ -384,3 +410,31 @@ class AppState(UserList):
         """
         for instance in queryset:
             self.append_from(instance, serializer_class, message_class)
+
+
+def get_or_create_txn_sender(using: Optional[str] = None) -> TransactionSender:
+    """
+    >>> from django.db import transaction
+    >>> txn_sender = get_or_create_txn_sender()
+    Traceback (most recent call last):
+    ...
+    django.db.transaction.TransactionManagementError:
+
+    >>> with transaction.atomic():
+    ...     txn_sender = get_or_create_txn_sender()
+    ...     isinstance(txn_sender, TransactionSender)
+    True
+
+    ...     get_or_create_txn_sender() is txn_sender
+    True
+
+    """
+    conn = get_connection(using=using)
+    if not conn.in_atomic_block:
+        raise TransactionManagementError("Not an atomic block")
+    for (idx, _callable) in conn.run_on_commit:
+        if isinstance(_callable, TransactionSender):
+            return _callable
+    txn_sender = TransactionSender()
+    conn.on_commit(txn_sender)
+    return txn_sender

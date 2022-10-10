@@ -1,10 +1,17 @@
+from __future__ import annotations
 from datetime import datetime
+from itertools import groupby
 from typing import Optional
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.timezone import now
+
+
+if TYPE_CHECKING:
+    from envelope.utils import SenderUtil
 
 
 class Connection(models.Model):
@@ -45,3 +52,53 @@ class Connection(models.Model):
 
     # Annotations
     objects: models.Manager
+
+
+class TransactionSender:
+    def __init__(self):
+        self.data = []
+
+    def __call__(self):
+        for x in self:
+            x()
+
+    def groupby(self):
+        return groupby(self.data, key=lambda x: x.group_key)
+
+    def batch_messages(self):
+        """
+        Go through all messages and batch them if possible
+        """
+        # Probably configurable later on
+        from envelope.messages.common import Batch
+        from envelope.utils import SenderUtil
+
+        data = []
+        for k, g in self.groupby():
+            items = list(g)
+            if len(items) > 2 and items[0].batch:
+                initial_util = items.pop(0)
+                batch = Batch.start(initial_util.msg)
+                for util in items:
+                    batch.append(util.msg)
+                items = [
+                    SenderUtil(
+                        batch,
+                        channel_name=initial_util.channel_name,
+                        group=initial_util.group,
+                        as_dict=initial_util.as_dict,
+                        run_handlers=initial_util.run_handlers,
+                        state=initial_util.state,
+                    )
+                ]
+            data.extend(items)
+        self.data = data
+
+    def add(self, sender_util: SenderUtil):
+        self.data.append(sender_util)
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)

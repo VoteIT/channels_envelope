@@ -6,6 +6,7 @@ from django.test import override_settings
 from fakeredis import FakeRedis
 from pydantic import BaseModel
 from rq import Queue
+from rq import Retry
 from rq import SimpleWorker
 
 from envelope.core.message import DeferredJob
@@ -80,7 +81,7 @@ class DeferredJobTests(TestCase):
         job = self.mk_job()
         job.validate()
         self.assertEqual(0, len(self.queue.job_ids))
-        job.enqueue(envelope=TestingEnvelope)
+        job.enqueue(envelope=TestingEnvelope.name)
         completed = self.worker.work(burst=True)
         self.assertTrue(completed)
 
@@ -91,7 +92,7 @@ class DeferredJobTests(TestCase):
         job = self.mk_job(fail=True)
         job.validate()
         self.assertEqual(0, len(self.queue.job_ids))
-        job.enqueue(envelope=TestingEnvelope)
+        job.enqueue(envelope=TestingEnvelope.name)
         self.assertEqual(1, len(self.queue.job_ids))
         completed = self.worker.work(burst=True)
         self.assertTrue(completed)
