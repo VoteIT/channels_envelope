@@ -253,7 +253,11 @@ def websocket_send(
     )
     if on_commit:
         txn_sender = get_or_create_txn_sender()
-        txn_sender.add(sender)
+        if txn_sender is None:
+            logger.info("on_commit called outside of transaction, sending immediately")
+            sender()
+        else:
+            txn_sender.add(sender)
     else:
         sender()
 
@@ -414,10 +418,12 @@ class AppState(UserList):
             self.append_from(instance, serializer_class, message_class)
 
 
-def get_or_create_txn_sender(using: Optional[str] = None) -> TransactionSender:
+def get_or_create_txn_sender(
+    using: Optional[str] = None, raise_exception=False
+) -> Optional[TransactionSender]:
     """
     >>> from django.db import transaction
-    >>> txn_sender = get_or_create_txn_sender()
+    >>> txn_sender = get_or_create_txn_sender(raise_exception=True)
     Traceback (most recent call last):
     ...
     django.db.transaction.TransactionManagementError:
@@ -433,7 +439,9 @@ def get_or_create_txn_sender(using: Optional[str] = None) -> TransactionSender:
     """
     conn = get_connection(using=using)
     if not conn.in_atomic_block:
-        raise TransactionManagementError("Not an atomic block")
+        if raise_exception:
+            raise TransactionManagementError("Not an atomic block")
+        return
     for (idx, _callable) in conn.run_on_commit:
         if isinstance(_callable, TransactionSender):
             return _callable
