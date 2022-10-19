@@ -83,8 +83,10 @@ class PubSubChannel(ABC):
         sender = self.create_sender(message)
         if on_commit:
             txn_sender = get_or_create_txn_sender()
-            txn_sender.add(sender)
-            # transaction.on_commit(sender)
+            if txn_sender is None:
+                sender()
+            else:
+                txn_sender.add(sender)
         else:
             sender()
 
