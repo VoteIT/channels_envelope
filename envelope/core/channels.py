@@ -16,6 +16,7 @@ from envelope import Error
 from envelope import WS_SEND_TRANSPORT
 from envelope.utils import SenderUtil
 from envelope.utils import get_error_type
+from envelope.utils import get_or_create_txn_sender
 
 if TYPE_CHECKING:
     from envelope.core.message import Message
@@ -81,17 +82,18 @@ class PubSubChannel(ABC):
     def sync_publish(self, message: Message, on_commit=True):
         sender = self.create_sender(message)
         if on_commit:
-            transaction.on_commit(sender)
+            txn_sender = get_or_create_txn_sender()
+            txn_sender.add(sender)
+            # transaction.on_commit(sender)
         else:
             sender()
 
     def create_sender(self, message: Message) -> SenderUtil:
-        envelope = message.envelope.pack(message)
+        # envelope = message.envelope.pack(message)
         return SenderUtil(
-            envelope,
-            self.channel_name,
+            message,
+            channel_name=self.channel_name,
             group=True,
-            transport=self.transport,
             as_dict=False,
         )
 
