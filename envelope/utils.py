@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from envelope.core.registry import ChannelRegistry
     from envelope.core.registry import ContextChannelRegistry
     from envelope.core.registry import EnvelopeRegistry
-    from envelope.core.envelope import Envelope
     from envelope.core.message import Message
     from envelope.core.message import ErrorMessage
 
@@ -314,11 +313,6 @@ def internal_send(
     if message.mm.registry is None:
         logger.debug(f"{message} lacks registry")
         message.mm.registry = INTERNAL
-    # reg = get_envelope_registry()
-    # envelope_type = reg[INTERNAL]
-    # envelope = envelope_type.pack(message)
-    # if state:
-    #    envelope.data.s = state
     sender = SenderUtil(
         message,
         channel_name=channel_name,
@@ -349,14 +343,12 @@ def websocket_send_error(
     if error.mm.registry is None:
         logger.debug(f"{error} lacks registry")
         error.mm.registry = ERRORS
-    reg = get_envelope_registry()
-    envelope_type = reg[ERRORS]
-    envelope = envelope_type.pack(error)
     sender = SenderUtil(
-        envelope,
+        error,
         channel_name=channel_name,
         group=group,
         run_handlers=run_handlers,
+        state=error.FAILED,
     )
     sender()
 
