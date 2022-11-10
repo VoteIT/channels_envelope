@@ -338,11 +338,8 @@ def websocket_send_error(
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
     """
-
     assert isinstance(error, get_error_message_class())
-    if error.mm.registry is None:
-        logger.debug(f"{error} lacks registry")
-        error.mm.registry = ERRORS
+    error.mm.registry = ERRORS
     sender = SenderUtil(
         error,
         channel_name=channel_name,
