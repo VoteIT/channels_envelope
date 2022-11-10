@@ -177,8 +177,8 @@ class DeferredJob(Message, ABC):
     """
 
     # Related to RQ
-    ttl = 20
-    job_timeout = 20
+    ttl = 10
+    job_timeout = 15
     queue: str = DEFAULT_QUEUE_NAME  # Queue name
 
     atomic: bool = True
