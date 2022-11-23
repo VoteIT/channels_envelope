@@ -403,8 +403,9 @@ class AppState(UserList):
         """
         Insert outgoing messages from queryset, using DRF serializer and message class
         """
-        for instance in queryset:
-            self.append_from(instance, serializer_class, message_class)
+        serializer = serializer_class(queryset, many=True)
+        for item in serializer.data:
+            self.append(message_class(data=item))
 
 
 def get_or_create_txn_sender(
