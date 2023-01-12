@@ -5,7 +5,6 @@ from datetime import datetime
 from logging import getLogger
 from typing import Optional
 from typing import TYPE_CHECKING
-from typing import Type
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -34,6 +33,7 @@ if TYPE_CHECKING:
     from envelope.core.registry import EnvelopeRegistry
     from envelope.core.message import Message
     from envelope.core.message import ErrorMessage
+    from rest_framework.serializers import Serializer
 
 channel_layer = get_channel_layer()
 logger = getLogger(__name__)
@@ -350,12 +350,12 @@ def websocket_send_error(
     sender()
 
 
-def get_message_type(message_name: str, _registry: str) -> Type[Message]:
+def get_message_type(message_name: str, _registry: str) -> type[Message]:
     reg = get_message_registry(_registry)
     return reg[message_name]
 
 
-def get_error_type(error_name: str, _registry: str = ERRORS) -> Type[ErrorMessage]:
+def get_error_type(error_name: str, _registry: str = ERRORS) -> type[ErrorMessage]:
     reg = get_message_registry(_registry)
     klass = reg[error_name]
     assert issubclass(klass, get_error_message_class())
@@ -385,8 +385,8 @@ class AppState(UserList):
     def append_from(
         self,
         instance: Model,
-        serializer_class,  #: Type[ModelSerializer],
-        message_class: Type[Message],
+        serializer_class: type[Serializer],
+        message_class: type[Message],
     ):
         """
         Insert outgoing message from instance, using DRF serializer and message_class
@@ -397,8 +397,8 @@ class AppState(UserList):
     def append_from_queryset(
         self,
         queryset: QuerySet,
-        serializer_class,  #: Type[ModelSerializer],
-        message_class: Type[Message],
+        serializer_class: type[Serializer],
+        message_class: type[Message],
     ):
         """
         Insert outgoing messages from queryset, using DRF serializer and message class
