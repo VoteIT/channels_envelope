@@ -9,27 +9,27 @@ from pydantic import validator
 from envelope import ERRORS
 from envelope import Error
 from envelope.core.message import ErrorMessage
-from envelope.decorators import add_message
+from envelope.utils import add_messages
 
 
 class ErrorSchema(BaseModel):
     msg: Optional[str]
 
 
-@add_message(ERRORS)
-class GenericError(ErrorMessage[ErrorSchema]):
+class GenericError(ErrorMessage):
     name = Error.GENERIC
     schema = ErrorSchema
+    data: ErrorSchema
 
 
 class ValidationErrorSchema(ErrorSchema):
     errors: List[dict]
 
 
-@add_message(ERRORS)
-class ValidationErrorMsg(ErrorMessage[ValidationErrorSchema]):
+class ValidationErrorMsg(ErrorMessage):
     name = Error.VALIDATION
     schema = ValidationErrorSchema
+    data: ValidationErrorSchema
 
 
 class MessageTypeErrorSchema(ErrorSchema):
@@ -37,13 +37,12 @@ class MessageTypeErrorSchema(ErrorSchema):
     registry: str
 
 
-@add_message(ERRORS)
-class MessageTypeError(ErrorMessage[MessageTypeErrorSchema]):
+class MessageTypeError(ErrorMessage):
     name = Error.MSG_TYPE
     schema = MessageTypeErrorSchema
+    data: MessageTypeErrorSchema
 
 
-@add_message(ERRORS)
 class BadRequestError(GenericError):
     """
     Pretty much HTTP 400
@@ -59,21 +58,34 @@ class NotFoundSchema(BaseModel):
 
     @validator("model", pre=True)
     def fetch_natural_key(cls, v):
+        """
+        >>> NotFoundSchema.fetch_natural_key('jeff')
+        'jeff'
+        >>> from envelope.models import Connection
+        >>> NotFoundSchema.fetch_natural_key(Connection)
+        'envelope.connection'
+        >>> NotFoundSchema.fetch_natural_key(Connection())
+        'envelope.connection'
+        >>> NotFoundSchema.fetch_natural_key(object())
+        Traceback (most recent call last):
+        ...
+        ValueError:
+        """
         if isinstance(v, str):
             return v
         elif isinstance(v, Model):
             v = v.__class__
-        if issubclass(v, Model):
+        if isinstance(v, type) and issubclass(v, Model):
             return f"{v._meta.app_label}.{v._meta.model_name.lower()}"
         raise ValueError(
             "Needs to be a string or instance/class based on djangos Model"
         )
 
 
-@add_message(ERRORS)
-class NotFoundError(ErrorMessage[NotFoundSchema]):
+class NotFoundError(ErrorMessage):
     name = Error.NOT_FOUND
     schema = NotFoundSchema
+    data: NotFoundSchema
 
 
 class UnauthorizedSchema(NotFoundSchema):
@@ -95,33 +107,27 @@ class UnauthorizedSchema(NotFoundSchema):
         >>> new_str = UnauthorizedSchema.adjust_user_str(mine)
         >>> new_str.__class__.__name__
         'str'
+        >>> UnauthorizedSchema.adjust_user_str('regular')
+        'regular'
         """
         if isinstance(v, UserString):
             return str(v)
         return v
 
 
-@add_message(ERRORS)
-class UnauthorizedError(ErrorMessage[UnauthorizedSchema]):
+class UnauthorizedError(ErrorMessage):
     name = Error.UNAUTHORIZED
     schema = UnauthorizedSchema
+    data: UnauthorizedSchema
 
 
-class SubscribeSchema(BaseModel):
-    channel_name: str
-
-
-@add_message(ERRORS)
-class SubscribeError(ErrorMessage[SubscribeSchema]):
-    name = Error.SUBSCRIBE
-    schema = SubscribeSchema
-
-
-@add_message(ERRORS)
-class JobError(GenericError):
-    """
-    A background task caused an exception/error. This is not meant for error checking, but merely to notify
-    frontend that there's no use waiting for this.
-    """
-
-    name = Error.JOB
+def register_errors():
+    add_messages(
+        ERRORS,
+        GenericError,
+        ValidationErrorMsg,
+        MessageTypeError,
+        BadRequestError,
+        NotFoundError,
+        UnauthorizedError,
+    )

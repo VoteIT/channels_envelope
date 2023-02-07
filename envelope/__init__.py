@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 # Registry names
 WS_INCOMING = "ws_incoming"
 WS_OUTGOING = "ws_outgoing"
@@ -13,12 +10,11 @@ WS_SEND_TRANSPORT = "websocket.send"
 WS_SEND_ERROR_TRANSPORT = "ws.error.send"
 INTERNAL_TRANSPORT = "internal.msg"
 
+# RQ default
+DEFAULT_QUEUE_NAME = "default"
+
 
 class MessageStates:
-    """
-    Message state constants
-    """
-
     ACKNOWLEDGED = "a"
     QUEUED = "q"
     RUNNING = "r"

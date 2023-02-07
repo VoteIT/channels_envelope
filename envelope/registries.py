@@ -1,29 +1,43 @@
 from __future__ import annotations
+from collections import UserDict
+from typing import TYPE_CHECKING
 
 
-from envelope import ERRORS
-from envelope import INTERNAL
-from envelope import WS_INCOMING
-from envelope import WS_OUTGOING
-from envelope.core.registry import ChannelRegistry
-from envelope.core.registry import ContextChannelRegistry
-from envelope.core.registry import HandlerRegistry
-from envelope.core.registry import MessageRegistry
-from envelope.core.registry import EnvelopeRegistry
+if TYPE_CHECKING:
+    from envelope.core.message import Message
+    from envelope.core.envelope import Envelope
+    from envelope.channels.models import ContextChannel
+    from envelope.channels.models import PubSubChannel
+
+__all__ = (
+    "MessageRegistry",
+    "EnvelopeRegistry",
+    "PubSubChannelRegistry",
+    "ContextChannelRegistry",
+    "message_registry",
+    "envelope_registry",
+    "pubsub_channel_registry",
+    "context_channel_registry",
+)
 
 
+class MessageRegistry(UserDict):
+    data: dict[str, dict[str, type[Message]]]
+
+
+class EnvelopeRegistry(UserDict):
+    data: dict[str, Envelope]
+
+
+class PubSubChannelRegistry(UserDict):
+    data: dict[str, type[PubSubChannel]]
+
+
+class ContextChannelRegistry(UserDict):
+    data: dict[str, type[ContextChannel]]
+
+
+message_registry = MessageRegistry()
 envelope_registry = EnvelopeRegistry()
-
-ws_incoming_messages = MessageRegistry(WS_INCOMING)
-ws_outgoing_messages = MessageRegistry(WS_OUTGOING)
-internal_messages = MessageRegistry(INTERNAL)
-default_error_messages = MessageRegistry(ERRORS)
-
-pubsub_channel_registry = ChannelRegistry()
-
+pubsub_channel_registry = PubSubChannelRegistry()
 context_channel_registry = ContextChannelRegistry()
-
-ws_incoming_handlers = HandlerRegistry(WS_INCOMING)
-ws_outgoing_handlers = HandlerRegistry(WS_OUTGOING)
-internal_handlers = HandlerRegistry(INTERNAL)
-default_error_handlers = HandlerRegistry(ERRORS)

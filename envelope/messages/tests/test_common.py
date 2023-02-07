@@ -7,9 +7,7 @@ from envelope.apps import ChannelsEnvelopeConfig
 from envelope.messages.common import Status
 from envelope.messages.common import ProgressNum
 
-# User = get_user_model()
-
-ChannelsEnvelopeConfig.populate_registries()
+User = get_user_model()
 
 
 class BatchTests(TestCase):

@@ -1,32 +1,30 @@
 from __future__ import annotations
 
-from typing import Set
-from typing import List
-from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Type
 from asgiref.sync import async_to_sync
 from pydantic import BaseModel
-from pydantic import validator
 
 from envelope import Error
 from envelope import INTERNAL
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
-from envelope.core.schemas import OutgoingEnvelopeSchema
-from envelope.decorators import add_message
+from envelope.channels.models import AppState
+from envelope.channels.models import ContextChannel
+from envelope.channels.schemas import ChannelSchema
+from envelope.channels.schemas import ChannelSubscription
+from envelope.channels.utils import get_context_channel
+from envelope.channels.utils import get_context_channel_registry
 from envelope.core.message import AsyncRunnable
+from envelope.decorators import add_message
 from envelope.core.message import Message
-from envelope.core.message import DeferredJob
+from envelope.deferred_jobs.message import DeferredJob
 from envelope.signals import channel_subscribed
-from envelope.utils import AppState
-from envelope.utils import get_context_channel_registry
 from envelope.utils import get_error_type
 from envelope.utils import websocket_send
-from envelope.core.channels import ContextChannel
 
 if TYPE_CHECKING:
-    from envelope.consumers.websocket import WebsocketConsumer
+    from envelope.consumer.websocket import WebsocketConsumer
 
 SUBSCRIBE = "channel.subscribe"
 LEAVE = "channel.leave"
@@ -37,31 +35,6 @@ LEFT = "channel.left"
 SUBSCRIPTIONS = "channel.subscriptions"
 
 
-class ChannelSchema(BaseModel):
-    pk: int
-    channel_type: str
-
-    class Config:
-        frozen = True
-
-    @validator("channel_type", allow_reuse=True)
-    def real_channel_type(cls, v):
-        cr = get_context_channel_registry()
-        v = v.lower()
-        if v not in cr:  # pragma: no cover
-            raise ValueError(f"'{v}' is not a valid channel")
-        return v
-
-
-class ChannelSubscription(ChannelSchema):
-    """
-    Track subscriptions to protected channels.
-    """
-
-    channel_name: str
-    app_state: Optional[List[OutgoingEnvelopeSchema]]
-
-
 class ChannelCommand:
     schema = ChannelSchema
     data: ChannelSchema
@@ -69,16 +42,16 @@ class ChannelCommand:
     def get_channel(
         self, channel_type: str, pk: int, consumer_name: str
     ) -> ContextChannel:
-        cr = get_context_channel_registry()
+        ch = get_context_channel(channel_type)
         # This may cause errors right?
-        return cr[channel_type](pk, consumer_name)
+        return ch(pk, consumer_name)
 
 
 @add_message(WS_INCOMING)
 class Subscribe(ChannelCommand, DeferredJob):
     name = SUBSCRIBE
 
-    def get_app_state(self, channel: ContextChannel) -> Optional[list]:
+    def get_app_state(self, channel: ContextChannel) -> list | None:
         """
         Dispatch signal to populate app_state object, and return as list object or None
         """
@@ -92,17 +65,18 @@ class Subscribe(ChannelCommand, DeferredJob):
         if app_state:
             return list(app_state)
 
-    async def pre_queue(self, consumer: WebsocketConsumer):
+    async def pre_queue(self, consumer: WebsocketConsumer) -> Subscribed:
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
         msg = Subscribed.from_message(
             self,
+            state=self.QUEUED,
             channel_name=channel.channel_name,
-            _registry=WS_OUTGOING,
             **self.data.dict(),
         )
-        await consumer.send_ws_message(msg, state=self.QUEUED)
+        await consumer.send_ws_message(msg)
+        return msg  # For testing
 
     def run_job(self) -> Subscribed:
         channel = self.get_channel(
@@ -113,12 +87,12 @@ class Subscribe(ChannelCommand, DeferredJob):
             app_state = self.get_app_state(channel)
             msg = Subscribed.from_message(
                 self,
+                state=self.SUCCESS,
                 channel_name=channel.channel_name,
-                _registry=WS_OUTGOING,
                 app_state=app_state,
                 **self.data.dict(),
             )
-            websocket_send(msg, state=self.SUCCESS, run_handlers=True)
+            websocket_send(msg)
             return msg
         else:
             raise get_error_type(Error.SUBSCRIBE).from_message(
@@ -140,9 +114,12 @@ class Leave(ChannelCommand, AsyncRunnable):
         )
         await channel.leave()
         msg = Left.from_message(
-            self, channel_name=channel.channel_name, **self.data.dict()
+            self,
+            state=self.SUCCESS,
+            channel_name=channel.channel_name,
+            **self.data.dict(),
         )
-        await consumer.send_ws_message(msg, state=self.SUCCESS)
+        await consumer.send_ws_message(msg)
         return msg
 
 
@@ -153,9 +130,9 @@ class ListSubscriptions(AsyncRunnable):
     async def run(self, *, consumer: WebsocketConsumer, **kwargs):
         assert consumer
         response = Subscriptions.from_message(
-            self, subscriptions=list(consumer.subscriptions)
+            self, state=self.SUCCESS, subscriptions=list(consumer.subscriptions)
         )
-        await consumer.send_ws_message(response, state=self.SUCCESS)
+        await consumer.send_ws_message(response)
         return response
 
 
@@ -168,7 +145,7 @@ class Subscribed(AsyncRunnable):
     async def run(self, *, consumer: WebsocketConsumer, **kwargs):
         assert consumer
         subscription = ChannelSchema(**self.data.dict())
-        consumer.mark_subscribed(subscription)
+        consumer.subscriptions.add(subscription)
 
 
 @add_message(WS_OUTGOING)
@@ -179,11 +156,12 @@ class Left(AsyncRunnable):
 
     async def run(self, *, consumer: WebsocketConsumer, **kwargs):
         assert consumer
-        consumer.mark_left(self.data)
+        if self.data in consumer.subscriptions:
+            consumer.subscriptions.remove(self.data)
 
 
 class SubscriptionsSchema(BaseModel):
-    subscriptions: List[ChannelSchema]
+    subscriptions: list[ChannelSchema]
 
 
 @add_message(WS_OUTGOING)
@@ -194,8 +172,8 @@ class Subscriptions(Message):
 
 
 class RecheckSubscriptionsSchema(BaseModel):
-    subscriptions: Set[ChannelSchema] = set()
-    consumer_name: Optional[str]
+    subscriptions: set[ChannelSchema] = set()
+    consumer_name: str | None
 
 
 @add_message(INTERNAL)
@@ -223,24 +201,27 @@ class RecheckChannelSubscriptions(DeferredJob):
     def should_run(self) -> bool:
         return bool(self.data.subscriptions)
 
-    def run_job(self) -> List[ChannelSchema]:
+    def run_job(self) -> list[ChannelSchema]:
         registry = get_context_channel_registry()
         # We don't really know if someone is subscribing due to how channels work, but we won't resubscribe
-        results = []  # The returned data is meant for unittesting and similar
+        results = []  # The returned data is meant for unit-testing and similar
         for channel_info in self.data.subscriptions:
             channel_info: ChannelSchema
             ch_class: Type[ContextChannel] = registry[channel_info.channel_type]
             if not issubclass(ch_class, ContextChannel):
                 continue
+            if not self.data.consumer_name:
+                raise ValueError("consumer_name shouldn't be none here")
             ch = ch_class(channel_info.pk, consumer_channel=self.data.consumer_name)
             if not ch.allow_subscribe(self.user):
                 async_to_sync(ch.leave)()
                 msg = Left.from_message(
                     self,
+                    state=self.SUCCESS,
                     channel_name=ch.channel_name,
                     channel_type=channel_info.channel_type,
                     pk=channel_info.pk,
                 )
-                websocket_send(msg, state=self.SUCCESS, run_handlers=True)
+                websocket_send(msg)
                 results.append(channel_info)
         return results

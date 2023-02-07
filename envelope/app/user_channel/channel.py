@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.utils.functional import classproperty
 
-from envelope.core.channels import ContextChannel
-from envelope.decorators import add_context_channel
+from envelope.channels.decorators import add_context_channel
+from envelope.channels.models import ContextChannel
 
 
 @add_context_channel
@@ -11,7 +11,7 @@ class UserChannel(ContextChannel):
     name = "user"
 
     def allow_subscribe(self, user):
-        return user.pk and user.pk == self.pk
+        return user and user.pk and user.pk == self.pk
 
     @classproperty
     def model(cls):

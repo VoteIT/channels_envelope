@@ -2,7 +2,7 @@
 
 
 def register_messages():
-    from . import channels, common, errors, ping
+    from . import common, ping
     from django.conf import settings
 
     if settings.DEBUG:

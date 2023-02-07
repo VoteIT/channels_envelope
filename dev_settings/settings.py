@@ -38,8 +38,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_rq",
-    "envelope",
+    "envelope.deferred_jobs",
+    "envelope.channels",
     "envelope.app.user_channel",
+    "envelope",  # After all other envelope things
 ]
 
 
@@ -181,7 +183,7 @@ LOGGING = {
             "propagate": False,
         },
         "envelope": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
-        "envelope.consumers.websocket.event": {
+        "envelope.consumer.websocket.event": {
             "handlers": ["json"],
             "level": "DEBUG",
             "propagate": False,

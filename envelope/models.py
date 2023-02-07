@@ -46,6 +46,7 @@ class Connection(models.Model):
     last_action: Optional[datetime] = models.DateTimeField(
         verbose_name="Last action", null=True, blank=True
     )
+    # FIXME: Close code?
 
     class Meta:
         unique_together = (("user", "channel_name"),)
@@ -87,9 +88,9 @@ class TransactionSender:
                         batch,
                         channel_name=initial_util.channel_name,
                         group=initial_util.group,
-                        as_dict=initial_util.as_dict,
-                        run_handlers=initial_util.run_handlers,
-                        state=initial_util.state,
+                        # as_dict=initial_util.as_dict,
+                        # run_handlers=initial_util.run_handlers,
+                        # state=initial_util.state,
                     )
                 ]
             data.extend(items)

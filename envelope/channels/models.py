@@ -2,24 +2,26 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
-from typing import Optional
-from typing import Set
+from collections import UserList
 from typing import TYPE_CHECKING
 
+from channels import DEFAULT_CHANNEL_LAYER
 from channels.layers import get_channel_layer
 from django.db import models
-from django.db import transaction
 from django.utils.functional import cached_property
-from typing import Type
 
 from envelope import Error
-from envelope import WS_SEND_TRANSPORT
+from envelope import WS_OUTGOING
 from envelope.utils import SenderUtil
 from envelope.utils import get_error_type
 from envelope.utils import get_or_create_txn_sender
 
 if TYPE_CHECKING:
     from envelope.core.message import Message
+    from django.db.models import Model
+    from django.db.models import QuerySet
+
+    # from rest_framework.serializers import ModelSerializer
 
 
 class PubSubChannel(ABC):
@@ -27,15 +29,16 @@ class PubSubChannel(ABC):
     A generic publish/subscribe that works with channels groups.
     """
 
-    consumer_channel: Optional[str]
+    consumer_channel: str | None
     # Expect transported messages in dict or string format?
-    dict_transport: bool = False
+    # dict_transport: bool = False
     # Override to set another kind of transport
     # Note that the consumer needs a method corresponding to the transport type.
     # See channels docs
-    transport: str = WS_SEND_TRANSPORT
+    # transport: str = WS_SEND_TRANSPORT
     # Override to support different channel layers
-    channel_layer = get_channel_layer()
+    envelope_name = WS_OUTGOING
+    layer_name = DEFAULT_CHANNEL_LAYER  # Default
 
     @property
     @abstractmethod
@@ -53,18 +56,22 @@ class PubSubChannel(ABC):
 
     def __init__(
         self,
-        consumer_channel: Optional[str] = None,
+        consumer_channel: str | None = None,
     ):
 
         self.consumer_channel = consumer_channel
 
-    def __init_subclass__(cls, **kwargs):
-        cls.__registries = set()
-        super().__init_subclass__(**kwargs)
+    # def __init_subclass__(cls, **kwargs):
+    #     cls.__registries = set()
+    #     super().__init_subclass__(**kwargs)
 
-    @classmethod
-    def registries(cls) -> Set:
-        return cls.__registries
+    # @classmethod
+    # def registries(cls) -> Set:
+    #     return cls.__registries
+
+    @cached_property
+    def channel_layer(self):
+        return get_channel_layer(alias=self.layer_name)
 
     async def subscribe(self):
         if not self.consumer_channel:
@@ -91,12 +98,11 @@ class PubSubChannel(ABC):
             sender()
 
     def create_sender(self, message: Message) -> SenderUtil:
-        # envelope = message.envelope.pack(message)
+        message.mm.registry = self.envelope_name
         return SenderUtil(
             message,
             channel_name=self.channel_name,
             group=True,
-            as_dict=False,
         )
 
 
@@ -111,7 +117,7 @@ class ContextChannel(PubSubChannel, ABC):
     def __init__(
         self,
         pk: int,
-        consumer_channel: Optional[str] = None,
+        consumer_channel: str | None = None,
     ):
         self.pk = pk
         super().__init__(consumer_channel)
@@ -125,14 +131,14 @@ class ContextChannel(PubSubChannel, ABC):
 
     @property
     @abstractmethod
-    def model(self) -> Type[models.Model]:
+    def model(self) -> type[models.Model]:
         """
         Set as property on subclass. Model should be the type of model this object channel is for.
         """
 
     @property
     @abstractmethod
-    def permission(self) -> Optional[str]:
+    def permission(self) -> str | None:
         """
         Set as property on subclass. The permission to evaluate subscribe commands against.
         If None is set, permission checks will be skipped.
@@ -140,7 +146,7 @@ class ContextChannel(PubSubChannel, ABC):
 
     @classmethod
     def from_instance(
-        cls, instance: models.Model, consumer_channel: Optional[str] = None
+        cls, instance: models.Model, consumer_channel: str | None = None
     ) -> ContextChannel:
         assert isinstance(instance, cls.model), f"Instance must be a {cls.model}"
         inst = cls(instance.pk, consumer_channel)
@@ -170,3 +176,46 @@ class ContextChannel(PubSubChannel, ABC):
         if self.context is None:
             return False
         return user.has_perm(self.permission, self.context)
+
+
+class AppState(UserList):
+    """
+    Attach several messages to a subscribed response. It's built for websocket application states.
+    """
+
+    # FIXME: Limit to specific registry in init?
+
+    def append(self, item: Message) -> None:
+        """
+        Append an outgoing message to another message. Used by pubsub and similar.
+        """
+        super().append(
+            dict(
+                t=item.name,
+                p=item.data,
+            )
+        )
+
+    def append_from(
+        self,
+        instance: Model,
+        serializer_class,
+        message_class: type[Message],
+    ):
+        """
+        Insert outgoing message from instance, using DRF serializer and message_class
+        """
+        data = serializer_class(instance).data
+        self.append(message_class(data=data))
+
+    def append_from_queryset(
+        self,
+        queryset: QuerySet,
+        serializer_class,
+        message_class: type[Message],
+    ):
+        """
+        Insert outgoing messages from queryset, using DRF serializer and message class
+        """
+        for instance in queryset:
+            self.append_from(instance, serializer_class, message_class)

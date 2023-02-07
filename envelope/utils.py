@@ -1,121 +1,130 @@
 from __future__ import annotations
-
-from collections import UserList
 from datetime import datetime
-from logging import getLogger
-from typing import Optional
 from typing import TYPE_CHECKING
-from typing import Type
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from django.contrib.auth.models import AbstractUser
 from django.db import transaction
-from django.db.models import Model
-from django.db.models import QuerySet
 from django.db.transaction import TransactionManagementError
 from django.db.transaction import get_connection
 
+from envelope import ERRORS
 from envelope import INTERNAL
 from envelope import WS_OUTGOING
-from pydantic import ValidationError
-from envelope import ERRORS
-from envelope import Error
-from envelope import WS_SEND_TRANSPORT
 from envelope.models import Connection
 from envelope.models import TransactionSender
-from envelope.signals import connection_terminated
 
 if TYPE_CHECKING:
-    from envelope.core.registry import HandlerRegistry
-    from envelope.core.registry import MessageRegistry
-    from envelope.core.registry import ChannelRegistry
-    from envelope.core.registry import ContextChannelRegistry
-    from envelope.core.registry import EnvelopeRegistry
-    from envelope.core.message import Message
     from envelope.core.message import ErrorMessage
+    from envelope.core.message import Message
+    from envelope.core.envelope import Envelope
+    from envelope.registries import MessageRegistry
 
+# FIXME: Selectable later on
 channel_layer = get_channel_layer()
-logger = getLogger(__name__)
 
 
-def get_error_message_class():
-    from envelope.core.message import ErrorMessage
+def get_global_message_registry() -> MessageRegistry:
+    from envelope.registries import message_registry
 
-    # Setting?
-    return ErrorMessage
-
-
-def get_message_class():
-    from envelope.core.message import Message
-
-    # Setting
-    return Message
+    return message_registry
 
 
-def update_connection_status(
-    user: AbstractUser,
-    channel_name: str,
-    online: Optional[bool] = True,
-    awol: Optional[bool] = None,
-    online_at: Optional[datetime] = None,
-    offline_at: Optional[datetime] = None,
-    last_action: Optional[datetime] = None,
-) -> Connection:
-    """
-    This is sync-only code so don't call this in any async context!
-    """
-    conn, created = Connection.objects.get_or_create(
-        user=user, channel_name=channel_name
-    )
-    conn: Connection
-    send_terminated = False
-    if online is not None:  # We might not know
-        if conn.online == True and online == False:
-            send_terminated = True
-        conn.online = online
-    if awol is not None:
-        conn.awol = awol
-    if online_at:
-        conn.online_at = online_at
-    if offline_at:
-        conn.offline_at = offline_at
-    if last_action:
-        conn.last_action = last_action
-    conn.save()
-    if send_terminated:
-        connection_terminated.send(sender=Connection, connection=conn, awol=conn.awol)
-    return conn
+def get_message_registry(name: str):
+    return get_global_message_registry()[name]
 
 
-def get_message_registry(name: str) -> MessageRegistry:
-    from envelope.core.registry import global_message_registry
-
-    return global_message_registry[name]
-
-
-def get_handler_registry(name: str) -> HandlerRegistry:
-    from envelope.core.registry import global_handler_registry
-
-    return global_handler_registry[name]
-
-
-def get_pubsub_channel_registry() -> ChannelRegistry:
-    from envelope.registries import pubsub_channel_registry
-
-    return pubsub_channel_registry
-
-
-def get_context_channel_registry() -> ContextChannelRegistry:
+def get_context_channel_registry():
     from envelope.registries import context_channel_registry
 
     return context_channel_registry
 
 
-def get_envelope_registry() -> EnvelopeRegistry:
+def get_pubsub_channel_registry():
+    from envelope.registries import pubsub_channel_registry
+
+    return pubsub_channel_registry
+
+
+def get_error_type(name) -> type[ErrorMessage]:
+    return get_message_registry(ERRORS)[name]
+
+
+def get_envelope(name) -> Envelope:
     from envelope.registries import envelope_registry
 
-    return envelope_registry
+    return envelope_registry[name]
+
+
+def get_envelope_from_message(message: Message) -> Envelope:
+    if message.mm.registry is None:
+        raise ValueError(f"{message} doesn't seem to have registry set")
+    return get_envelope(message.mm.registry)
+
+
+def add_envelopes(*envelopes: Envelope):
+    """
+    Decorator to add handlers to several namespaces.
+
+
+    >>> from envelope.registries import envelope_registry
+    >>> from envelope.registries import message_registry
+    >>> from envelope.core.envelope import Envelope
+    >>> from envelope.schemas import EnvelopeSchema
+
+    >>> add_envelopes(Envelope(schema=EnvelopeSchema, registry_name='hello'))
+    >>> 'hello' in envelope_registry
+    True
+    >>> 'hello' in message_registry
+    True
+
+    Cleanup
+    >>> del envelope_registry['hello']
+    >>> del message_registry['hello']
+    """
+    from envelope.registries import envelope_registry
+    from envelope.registries import message_registry
+
+    for envelope in envelopes:
+        envelope_registry[envelope.registry_name] = envelope
+        message_registry.setdefault(envelope.registry_name, {})
+
+
+def add_messages(namespace: str, *messages: type[Message]):
+    from envelope.registries import message_registry
+
+    assert namespace in message_registry, "No message registry named %s" % namespace
+    for message in messages:
+        message_registry[namespace][message.name] = message
+
+
+def update_connection_status(
+    user_pk: int,
+    channel_name: str,
+    online: bool | None = True,
+    awol: bool | None = None,
+    online_at: datetime | None = None,
+    offline_at: datetime | None = None,
+    last_action: datetime | None = None,
+) -> Connection:
+    """
+    This is sync-only code so don't call this in any async context!
+    """
+    new_values = {
+        "online": online,
+        "awol": awol,
+        "online_at": online_at,
+        "offline_at": offline_at,
+        "last_action": last_action,
+    }
+    # None means we shouldn't touch it
+    new_values = {k: v for k, v in new_values.items() if v is not None}
+    conn, created = Connection.objects.update_or_create(
+        user_id=user_pk,
+        channel_name=channel_name,
+        defaults=new_values,
+    )
+    return conn
 
 
 class SenderUtil:
@@ -127,31 +136,17 @@ class SenderUtil:
     # FIXME: Allow channel layer specification?
     def __init__(
         self,
-        # envelope: Envelope,
-        msg: Message,
+        message: Message,
         *,
         channel_name: str,
         group: bool = False,
-        as_dict: bool = False,
-        run_handlers: Optional[bool] = None,
-        state: Optional[str] = None,
+        layer_name: str | None = None,
     ):
-        # self.envelope = envelope
-        assert isinstance(msg, get_message_class())
-        self.msg = msg
-        self.state = state
-        # Check that things work
-        if self.msg.envelope is None:
-            # Will probably raise another exception before this
-            raise TypeError(f"{self.msg} doesn't seem to have envelope set")
+
+        self.message = message
+        self.envelope = get_envelope_from_message(message)
         self.channel_name = channel_name
         self.group = group
-        self.transport = msg.envelope.transport
-        assert self.transport
-        # Send as dict or text?
-        self.as_dict = as_dict
-        # Should the consumer run handlers?
-        self.run_handlers = run_handlers
 
     def __call__(self):
         async_to_sync(self.async_send)()
@@ -161,29 +156,18 @@ class SenderUtil:
         """
         Everything that makes message groupable
         """
-        return f"{self.msg.name}{self.channel_name}{self.state and self.state or ''}{int(self.group)}{int(self.as_dict)}{self.transport}"
+        return f"{self.message.name}{self.channel_name}{self.message.mm.registry}{self.message.mm.state and self.message.mm.state or ''}{int(self.group)}"
 
     @property
     def batch(self) -> bool:
-        # FIXME
-        from envelope.messages.common import Batch
-
-        return self.transport in (WS_SEND_TRANSPORT, "testing") and not isinstance(
-            self.msg, Batch
-        )
+        return self.envelope.allow_batch and self.message.allow_batch
 
     async def async_send(self):
-        packed = self.msg.pack()
-        if self.state:
-            packed.data.s = self.state
-        if self.as_dict:
-            payload = packed.as_dict_transport(self.transport)
-            # payload = self.envelope.as_dict_transport(self.transport)
-        else:
-            payload = packed.as_text_transport(self.transport)
-            # payload = self.envelope.as_text_transport(self.transport)
-        if self.run_handlers is not None:
-            payload["run_handlers"] = self.run_handlers
+        if self.envelope.transport is None:
+            raise ValueError(
+                f"Don't know how to send message {self.message} since envelope {self.message} lacks transport"
+            )
+        payload = self.envelope.transport(self.envelope, self.message)
         if self.group:
             await channel_layer.group_send(self.channel_name, payload)
         else:
@@ -194,10 +178,9 @@ def websocket_send(
     message: Message,
     *,
     channel_name: str = None,
-    state: Optional[str] = None,
+    state: str | None = None,
     on_commit: bool = True,
     group: bool = False,
-    run_handlers=None,
 ):
     """
     From sync world outside the websocket consumer - send a message to a group or a specific consumer.
@@ -224,36 +207,29 @@ def websocket_send(
     False
     >>> post_commit_called
     True
-
     """
-    assert isinstance(message, get_message_class())
     if channel_name is None:
-        assert message.mm.consumer_name
-        assert (
-            not group
-        ), "Specify channel_name if you'd like to send the message to a group"
+        if group:
+            raise Exception(
+                "Specify channel_name if you'd like to send the message to a group"
+            )
+        if message.mm.consumer_name is None:
+            raise Exception(
+                "Must specify either channel_name as argument to this function or on message"
+            )
         channel_name = message.mm.consumer_name
-    try:
-        message.validate()
-    except ValidationError as exc:
-        error = get_error_type(Error.VALIDATION).from_message(
-            message, errors=exc.errors()
-        )
-        raise error
-    if message.mm.registry is None:
-        logger.debug(f"{message} lacks registry")
-        message.mm.registry = WS_OUTGOING
+    if state is not None:
+        message.mm.state = state
+    message.mm.registry = WS_OUTGOING
     sender = SenderUtil(
         message,
         channel_name=channel_name,
         group=group,
-        run_handlers=run_handlers,
-        state=state,
     )
     if on_commit:
         txn_sender = get_or_create_txn_sender()
         if txn_sender is None:
-            logger.info("on_commit called outside of transaction, sending immediately")
+            # logger.info("on_commit called outside of transaction, sending immediately")
             sender()
         else:
             txn_sender.add(sender)
@@ -265,7 +241,7 @@ def internal_send(
     message: Message,
     *,
     channel_name: str = None,
-    state: Optional[str] = None,
+    state: str | None = None,
     on_commit: bool = True,
     group: bool = False,
 ):
@@ -295,34 +271,25 @@ def internal_send(
     >>> post_commit_called
     True
     """
-    assert isinstance(message, get_message_class())
     if channel_name is None:
-        assert message.mm.consumer_name
-        assert (
-            not group
-        ), "Specify channel_name if you'd like to send the message to a group"
+        if group:
+            raise Exception(
+                "Specify channel_name if you'd like to send the message to a group"
+            )
+        if message.mm.consumer_name is None:
+            raise Exception(
+                "Must specify either channel_name as argument to this function or on message"
+            )
         channel_name = message.mm.consumer_name
-    try:
-        message.validate()
-    except ValidationError as exc:
-        # These messages will probably not get caught since they're a programming error and not due to user input
-        error = get_error_type(Error.VALIDATION).from_message(
-            message, errors=exc.errors()
-        )
-        raise error
-    if message.mm.registry is None:
-        logger.debug(f"{message} lacks registry")
-        message.mm.registry = INTERNAL
+    if state is not None:
+        message.mm.state = state
+    message.mm.registry = INTERNAL
     sender = SenderUtil(
         message,
         channel_name=channel_name,
         group=group,
-        as_dict=True,
-        state=state,
     )
     if on_commit:
-        # FIXME: Option to disable commit?
-        # if on_commit and not self.is_on_commit_disabled:
         transaction.on_commit(sender)
     else:
         sender()
@@ -330,89 +297,27 @@ def internal_send(
 
 def websocket_send_error(
     error: ErrorMessage,
+    *,
     channel_name: str,
     group: bool = False,
-    run_handlers: Optional[bool] = None,
 ):
     """
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
     """
 
-    assert isinstance(error, get_error_message_class())
-    if error.mm.registry is None:
-        logger.debug(f"{error} lacks registry")
-        error.mm.registry = ERRORS
+    error.mm.registry = ERRORS
     sender = SenderUtil(
         error,
         channel_name=channel_name,
         group=group,
-        run_handlers=run_handlers,
-        state=error.FAILED,
     )
     sender()
 
 
-def get_message_type(message_name: str, _registry: str) -> Type[Message]:
-    reg = get_message_registry(_registry)
-    return reg[message_name]
-
-
-def get_error_type(error_name: str, _registry: str = ERRORS) -> Type[ErrorMessage]:
-    reg = get_message_registry(_registry)
-    klass = reg[error_name]
-    assert issubclass(klass, get_error_message_class())
-    return klass
-
-
-class AppState(UserList):
-    """
-    Attach several messages to a subscribed response. It's built for websocket application states.
-    """
-
-    def append(self, item: Message) -> None:
-        """
-        Append an outgoing message to another message. Used by pubsub and similar.
-        """
-        assert (
-            WS_OUTGOING in item.registries()
-        ), f"{item} is not registered as an outgoing websocket message"
-        item.validate()  # In case it wasn't done before
-        super().append(
-            dict(
-                t=item.name,
-                p=item.data,
-            )
-        )
-
-    def append_from(
-        self,
-        instance: Model,
-        serializer_class,  #: Type[ModelSerializer],
-        message_class: Type[Message],
-    ):
-        """
-        Insert outgoing message from instance, using DRF serializer and message_class
-        """
-        data = serializer_class(instance).data
-        self.append(message_class(data=data))
-
-    def append_from_queryset(
-        self,
-        queryset: QuerySet,
-        serializer_class,  #: Type[ModelSerializer],
-        message_class: Type[Message],
-    ):
-        """
-        Insert outgoing messages from queryset, using DRF serializer and message class
-        """
-        for instance in queryset:
-            self.append_from(instance, serializer_class, message_class)
-
-
 def get_or_create_txn_sender(
-    using: Optional[str] = None, raise_exception=False
-) -> Optional[TransactionSender]:
+    using: str | None = None, raise_exception=False
+) -> TransactionSender | None:
     """
     >>> from django.db import transaction
     >>> txn_sender = get_or_create_txn_sender(raise_exception=True)
@@ -434,7 +339,7 @@ def get_or_create_txn_sender(
         if raise_exception:
             raise TransactionManagementError("Not an atomic block")
         return
-    for (idx, _callable) in conn.run_on_commit:
+    for (_, _callable) in conn.run_on_commit:
         if isinstance(_callable, TransactionSender):
             return _callable
     txn_sender = TransactionSender()
