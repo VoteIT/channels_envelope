@@ -158,6 +158,11 @@ class ErrorMessage(Message, Generic[S], Exception, ABC):
         self.validate()  # Any validation error on errors should be handled straight away
         self.initial_data = None  # We don't care...
 
+    def __str__(self):
+        return "\n" + "\n".join(
+            f"{k}:\n    {v}" for k, v in self.data.dict(exclude_unset=True).items()
+        )
+
 
 class AsyncRunnable(Message, ABC):
     """
