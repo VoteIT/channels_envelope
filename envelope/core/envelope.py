@@ -149,8 +149,6 @@ class Envelope:
         Traceback (most recent call last):
         ...
         envelope.core.errors.MessageTypeError: MessageTypeErrorSchema(msg=None, type_name='404', registry='testing')
-
-
         """
         if mm is None and consumer is None:
             mm = {"user_pk": None}
@@ -180,6 +178,16 @@ class Envelope:
     def pack(self, message: Message) -> EnvelopeSchema:
         """
         Pack (or insert) message into an envelope 👅
+
+        >>> from envelope.schemas import OutgoingEnvelopeSchema
+        >>> env = Envelope(schema=OutgoingEnvelopeSchema, registry_name='testing')
+        >>> 'testing.hello' in env.registry
+        True
+        >>> msg_class = env.registry['testing.hello']
+        >>> hello_msg = msg_class( \
+                mm={'registry': 'boo', 'consumer_name': 'abc', 'user_pk': 1, 'state': 'q', 'id': 5})
+        >>> env.pack(hello_msg)
+        OutgoingEnvelopeSchema(t='testing.hello', p=None, i='5', s='q')
         """
         kwargs = message.mm.dict(
             exclude={"registry", "consumer_name"}, exclude_none=True

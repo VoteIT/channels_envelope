@@ -1,7 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
 from itertools import groupby
-from typing import Optional
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -27,7 +26,6 @@ class Connection(models.Model):
         on_delete=models.CASCADE,
         related_name="connections",
     )
-    # device_id = models.CharField(max_lenght=100)
     channel_name: str = models.CharField(
         verbose_name="Consumers own channel name", max_length=100
     )
@@ -35,15 +33,14 @@ class Connection(models.Model):
     online: bool = models.BooleanField(default=True)
     # Did this connection disappear without closing properly?
     awol: bool = models.BooleanField(default=False)
-    # IP?
     online_at: datetime = models.DateTimeField(
         verbose_name="Connection timestamp", default=now
     )
-    offline_at: Optional[datetime] = models.DateTimeField(
+    offline_at: datetime | None = models.DateTimeField(
         verbose_name="Disconnect timestamp", null=True, blank=True
     )
     # Note that last_action is not done automatically, so this is an estimate
-    last_action: Optional[datetime] = models.DateTimeField(
+    last_action: datetime | None = models.DateTimeField(
         verbose_name="Last action", null=True, blank=True
     )
     # FIXME: Close code?

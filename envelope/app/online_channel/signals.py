@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 from typing import TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
@@ -21,11 +20,11 @@ def subscribe_client_to_online_channel(user: AbstractUser, consumer_name: str, *
 
 @receiver(client_close)
 def cleanup_online_channel(
-    user: Optional[AbstractUser],
+    user: AbstractUser | None,
     consumer_name: str,
     user_pk: int,
-    close_code: Optional[int],
-    **kw
+    close_code: int | None,
+    **kw,
 ):
     ch = OnlineChannel(consumer_channel=consumer_name)
     async_to_sync(ch.leave)()

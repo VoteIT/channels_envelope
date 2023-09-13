@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils.translation import activate
 
 from envelope import Error
+from envelope import WS_INCOMING
 from envelope.core.message import ErrorMessage
 from envelope.signals import client_close
 from envelope.signals import client_connect
@@ -119,19 +120,16 @@ def mark_connection_action(
 
 
 def default_incoming_websocket(
-    data: dict,
-    mm: dict,
-    *,
-    enqueued_at: datetime = None,
+    data: dict, mm: dict, t: str, *, enqueued_at: datetime = None, **kwargs
 ):
-    envelope = get_envelope(mm["registry"])
-    message = envelope.unpack(data, mm=mm)
+    envelope = get_envelope(WS_INCOMING)
+    # We won't handle key error here. Message name should've been checked when it was received.
+    message = envelope.registry[t](mm=mm, data=data)
     run_job(message, enqueued_at=enqueued_at)
 
 
 def run_job(message: DeferredJob, *, enqueued_at: datetime = None, update_conn=True):
     message.on_worker = True
-
     if message.mm.language:
         # Otherwise skip lang?
         activate(message.mm.language)

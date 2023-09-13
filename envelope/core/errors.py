@@ -1,6 +1,4 @@
 from collections import UserString
-from typing import List
-from typing import Optional
 
 from django.db.models import Model
 from pydantic import BaseModel
@@ -13,7 +11,7 @@ from envelope.utils import add_messages
 
 
 class ErrorSchema(BaseModel):
-    msg: Optional[str]
+    msg: str | None
 
 
 class GenericError(ErrorMessage):
@@ -23,7 +21,7 @@ class GenericError(ErrorMessage):
 
 
 class ValidationErrorSchema(ErrorSchema):
-    errors: List[dict]
+    errors: list[dict]
 
 
 class ValidationErrorMsg(ErrorMessage):
@@ -89,7 +87,7 @@ class NotFoundError(ErrorMessage):
 
 
 class UnauthorizedSchema(NotFoundSchema):
-    permission: Optional[str]
+    permission: str | None
 
     @validator("permission", pre=True)
     def adjust_user_str(cls, v):

@@ -76,7 +76,10 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             self.connection_update_interval = timedelta(seconds=180)
         # Set timestamps
         self.last_job = self.last_sent = self.last_received = now()
-        self.validation_exc = get_error_type(Error.VALIDATION)
+
+    @property
+    def validation_exc(self):
+        return get_error_type(Error.VALIDATION)
 
     async def connect(self):
         self.language = get_language(self.scope)
@@ -102,12 +105,6 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
     # NOTE! database_sync_to_async doesn't work in tests - use mock to override
     async def get_user(self) -> AbstractUser | AnonymousUser:
         return await get_user(self.scope)
-
-    # @property
-    # def async_signals(self):
-    #     from envelope import async_signals
-    #
-    #     return async_signals
 
     # def mark_subscribed(self, subscription: ChannelSchema):
     #     # assert isinstance(subscription, ChannelSchema)

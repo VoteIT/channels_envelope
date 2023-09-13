@@ -4,11 +4,9 @@ from typing import TYPE_CHECKING
 
 from async_signals import Signal
 from django.apps import AppConfig
-from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.utils.module_loading import import_string
-from django_rq import get_queue
-from rq import Queue
+
+
 
 
 if TYPE_CHECKING:

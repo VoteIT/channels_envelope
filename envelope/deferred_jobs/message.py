@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django_rq import get_queue
+from pydantic import BaseModel
+from rq import Queue
 
 from envelope import DEFAULT_QUEUE_NAME
 from envelope import Error
@@ -15,7 +17,6 @@ from envelope.utils import get_error_type
 
 if TYPE_CHECKING:
     from django.db.models import Model
-    from rq import Queue
 
 
 class DeferredJob(Message, ABC):
@@ -24,17 +25,16 @@ class DeferredJob(Message, ABC):
     """
 
     # Related to RQ
-    ttl = None  # Queue timeout in seconds if you want to override default
-    job_timeout = None  # Job exec timeout in seconds if you want to override default
+    ttl: int | None = None  # Queue timeout in seconds if you want to override default
+    job_timeout: int | None = (
+        None  # Job exec timeout in seconds if you want to override default
+    )
     queue: str = DEFAULT_QUEUE_NAME  # Queue name
+    # connection: None | Redis = None
     atomic: bool = True
     on_worker: bool = False
-    job: callable | str = "envelope.jobs.default_incoming_websocket"
+    job: callable | str = "envelope.deferred_jobs.jobs.default_incoming_websocket"
     should_run: bool = True  # Mark as false to abort run
-
-    @cached_property
-    def rq_queue(self) -> Queue:
-        return get_queue(self.queue)
 
     async def pre_queue(self, **kwargs):
         """
@@ -48,7 +48,10 @@ class DeferredJob(Message, ABC):
 
         return handle_failure
 
-    def enqueue(self, **kwargs):
+    def enqueue(self, queue: Queue | None = None, **kwargs):
+        if queue is None:
+            queue = get_queue(self.queue)
+        assert isinstance(queue, Queue)
         data = {}
         if self.data:
             data = self.data.dict()
@@ -57,7 +60,7 @@ class DeferredJob(Message, ABC):
             kwargs["job_timeout"] = self.job_timeout
         if self.ttl:
             kwargs["ttl"] = self.ttl
-        return self.rq_queue.enqueue(
+        return queue.enqueue(
             self.job,
             t=self.name,
             mm=self.mm.dict(),
@@ -74,6 +77,10 @@ class DeferredJob(Message, ABC):
         pass
 
 
+class ContextActionSchema(BaseModel):
+    pk: int
+
+
 class ContextAction(DeferredJob, ABC):
     """
     An action performed on a specific context.
@@ -85,6 +92,7 @@ class ContextAction(DeferredJob, ABC):
     combining it with DeferredJob and must also inherit BaseIncomingMessage or BaseOutgoingMessage
     """
 
+    schema = ContextActionSchema  # Most basic required
     context_schema_attr = "pk"  # Fetch context from this identifier
     context_query_kw = "pk"  # And use this search keyword
 

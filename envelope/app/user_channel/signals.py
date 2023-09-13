@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 from typing import TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
@@ -24,7 +23,7 @@ def subscribe_client_to_users_channel(instance: Connection, **kw):
 @receiver(client_close)
 def leave_users_channel(
     instance: Connection,
-    close_code: Optional[int],
+    close_code: int | None,
     **kw,
 ):
     """

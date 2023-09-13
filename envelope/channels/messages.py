@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from typing import Type
 from asgiref.sync import async_to_sync
 from pydantic import BaseModel
 
@@ -207,7 +206,7 @@ class RecheckChannelSubscriptions(DeferredJob):
         results = []  # The returned data is meant for unit-testing and similar
         for channel_info in self.data.subscriptions:
             channel_info: ChannelSchema
-            ch_class: Type[ContextChannel] = registry[channel_info.channel_type]
+            ch_class: type[ContextChannel] = registry[channel_info.channel_type]
             if not issubclass(ch_class, ContextChannel):
                 continue
             if not self.data.consumer_name:
