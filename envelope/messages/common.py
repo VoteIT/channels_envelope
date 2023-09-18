@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from pydantic import Field
 
 from envelope import WS_OUTGOING
 from envelope.core.message import Message
@@ -86,3 +87,80 @@ class Batch(Message):
             self.data.payloads.append(None)
         else:
             self.data.payloads.append(msg.data)
+
+
+class Batch2Schema(BaseModel):
+    t: str
+    common: dict | None
+    keys: list = []  # Field(default_factory=list)
+    values: list = []
+
+
+@add_message(WS_OUTGOING)
+class Batch2(Message):
+    name = "s.batch2"
+    schema = Batch2Schema
+    data: Batch2Schema
+    allow_batch = False
+
+    @classmethod
+    def start(self, msg: Message, common: dict | None = None):
+        """
+        >>> from envelope.tests.helpers import WebsocketHello
+        >>> hello = WebsocketHello()
+        >>> batch = Batch2.start(hello)
+        >>> batch.data
+        Batch2Schema(t='testing.hello', common=None, keys=[], values=[None])
+
+        >>> progress = ProgressNum(curr=1, total=2)
+        >>> batch = Batch2.start(progress)
+        >>> batch.data
+        Batch2Schema(t='progress.num', common=None, keys=['curr', 'total', 'msg'], values=[[1, 2, None]])
+
+        """
+        if msg.data:
+            data = msg.data.dict()
+            return Batch2.from_message(
+                msg,
+                data={
+                    "t": msg.name,
+                    "keys": list(data.keys()),
+                    "values": [list(data.values())],
+                    "common": common,
+                },
+            )
+        return Batch2.from_message(
+            msg, data={"t": msg.name, "values": [None], "common": common}
+        )
+
+    def append(self, msg: Message):
+        """
+        >>> from envelope.tests.helpers import WebsocketHello
+        >>> hello = WebsocketHello()
+        >>> batch = Batch2.start(hello)
+        >>> batch.append(hello)
+        >>> batch.data
+        Batch2Schema(t='testing.hello', common=None, keys=[], values=[None, None])
+
+        >>> progress = ProgressNum(curr=1, total=2)
+        >>> batch = Batch2.start(progress)
+        >>> batch.append(progress)
+        >>> batch.data
+        Batch2Schema(t='progress.num', common=None, keys=['curr', 'total', 'msg'], values=[[1, 2, None], [1, 2, None]])
+        """
+        if self.data.t != msg.name:
+            raise TypeError(
+                f"All batch messages must be of the same type. Expected: {self.data.t} Was: {msg.name}"
+            )
+        if msg.data is None:
+            self.data.values.append(None)
+        else:
+            data = msg.data.dict()
+            v = []
+            for k in self.data.keys:
+                v.append(data.pop(k))
+            if data:
+                raise ValueError(
+                    f"batch2 messages appended can't have extra keys. Offending keys: {', '.join(data.keys())}"
+                )
+            self.data.values.append(v)
