@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 from envelope import ERRORS
 from envelope import Error
-from envelope.core.errors import GenericError
+from envelope.messages.errors import GenericError
 from envelope.core.message import ErrorMessage
 from envelope.decorators import add_message
 

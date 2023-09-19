@@ -27,7 +27,7 @@ class ChannelsEnvelopeConfig(AppConfig):
 
         register_envelopes()
 
-        from envelope.core.errors import register_errors
+        from envelope.messages.errors import register_errors
 
         register_errors()
 
