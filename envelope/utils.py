@@ -1,24 +1,28 @@
 from __future__ import annotations
 from datetime import datetime
+from itertools import groupby
 from typing import TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.conf import settings
 from django.db import transaction
 from django.db.transaction import TransactionManagementError
 from django.db.transaction import get_connection
+from django.utils.functional import cached_property
+from django.utils.module_loading import import_string
 
 from envelope import ERRORS
 from envelope import INTERNAL
 from envelope import WS_OUTGOING
 from envelope.models import Connection
-from envelope.models import TransactionSender
 
 if TYPE_CHECKING:
     from envelope.core.message import ErrorMessage
     from envelope.core.message import Message
     from envelope.core.envelope import Envelope
     from envelope.registries import MessageRegistry
+    from envelope.messages.common import BatchMessage
 
 # FIXME: Selectable later on
 channel_layer = get_channel_layer()
@@ -60,6 +64,26 @@ def get_envelope_from_message(message: Message) -> Envelope:
     if message.mm.registry is None:
         raise ValueError(f"{message} doesn't seem to have registry set")
     return get_envelope(message.mm.registry)
+
+
+def get_batch_message() -> type[BatchMessage]:
+    try:
+        batch_message_name = getattr(settings, "ENVELOPE_BATCH_MESSAGE")
+        return import_string(batch_message_name)
+    except AttributeError:
+        from envelope.messages.common import Batch
+
+        return Batch
+
+
+def get_sender_util() -> type[SenderUtil]:
+    try:
+        sender_util_name = getattr(settings, "ENVELOPE_SENDER_UTIL")
+        return import_string(sender_util_name)
+    except AttributeError:
+        from envelope.utils import SenderUtil
+
+        return SenderUtil
 
 
 def add_envelopes(*envelopes: Envelope):
@@ -221,7 +245,7 @@ def websocket_send(
     if state is not None:
         message.mm.state = state
     message.mm.registry = WS_OUTGOING
-    sender = SenderUtil(
+    sender = get_sender_util()(
         message,
         channel_name=channel_name,
         group=group,
@@ -284,7 +308,7 @@ def internal_send(
     if state is not None:
         message.mm.state = state
     message.mm.registry = INTERNAL
-    sender = SenderUtil(
+    sender = get_sender_util()(
         message,
         channel_name=channel_name,
         group=group,
@@ -307,7 +331,7 @@ def websocket_send_error(
     """
 
     error.mm.registry = ERRORS
-    sender = SenderUtil(
+    sender = get_sender_util()(
         error,
         channel_name=channel_name,
         group=group,
@@ -345,3 +369,59 @@ def get_or_create_txn_sender(
     txn_sender = TransactionSender()
     conn.on_commit(txn_sender)
     return txn_sender
+
+
+class TransactionSender:
+    def __init__(self):
+        self.data = []
+
+    def __call__(self):
+        self.batch_messages()
+        for x in self:
+            x()
+
+    @cached_property
+    def batch_factory(self) -> type[BatchMessage]:
+        return get_batch_message()
+
+    @cached_property
+    def sender_util(self) -> type[SenderUtil]:
+        return get_sender_util()
+
+    def groupby(self):
+        return groupby(self.data, key=lambda x: x.group_key)
+
+    def batch_messages(self):
+        """
+        Go through all messages and batch them if possible
+        """
+
+        data = []
+        for k, g in self.groupby():
+            items = list(g)
+            if len(items) > 2 and items[0].batch:
+                initial_util = items.pop(0)
+                batch = self.batch_factory.start(initial_util.message)
+                for util in items:
+                    batch.append(util.message)
+                items = [
+                    self.sender_util(
+                        batch,
+                        channel_name=initial_util.channel_name,
+                        group=initial_util.group,
+                        # as_dict=initial_util.as_dict,
+                        # run_handlers=initial_util.run_handlers,
+                        # state=initial_util.state,
+                    )
+                ]
+            data.extend(items)
+        self.data = data
+
+    def add(self, sender_util: SenderUtil):
+        self.data.append(sender_util)
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)

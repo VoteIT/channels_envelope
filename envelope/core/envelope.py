@@ -193,5 +193,5 @@ class Envelope:
             exclude={"registry", "consumer_name"}, exclude_none=True
         )
         if message.data is not None:
-            kwargs["p"] = message.data
+            kwargs["p"] = message.data.dict()
         return self.schema(t=message.name, **kwargs)

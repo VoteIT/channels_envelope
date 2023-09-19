@@ -4,10 +4,9 @@ from typing import TYPE_CHECKING
 
 from async_signals import Signal
 from django.apps import AppConfig
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-
-
-
+from django.utils.module_loading import import_string
 
 if TYPE_CHECKING:
     from envelope.core.message import Message
@@ -32,9 +31,29 @@ class ChannelsEnvelopeConfig(AppConfig):
 
         register_errors()
 
+        self.check_settings_and_import()
         self.check_consumer_settings()
         self.check_registries_names()
         self.register_deferred_signals()
+
+    @staticmethod
+    def check_settings_and_import():
+        from envelope.messages.common import BatchMessage
+
+        # Batch message factory to use
+        batch_message_name = getattr(settings, "ENVELOPE_BATCH_MESSAGE", None)
+        if isinstance(batch_message_name, str):
+            klass = import_string(batch_message_name)
+            if not issubclass(klass, BatchMessage):
+                raise ImproperlyConfigured(
+                    f"{klass} is not a subclass of envelope.messages.common.BatchMessage - check ENVELOPE_BATCH_MESSAGE in settings."
+                )
+
+        # Sender util to use
+        sender_util_name = getattr(settings, "ENVELOPE_SENDER_UTIL", None)
+        if isinstance(sender_util_name, str):
+            # Validation...?
+            import_string(sender_util_name)
 
     @staticmethod
     def check_consumer_settings():

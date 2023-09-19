@@ -1,5 +1,7 @@
+from abc import ABC
+from abc import abstractmethod
+
 from pydantic import BaseModel
-from pydantic import Field
 
 from envelope import WS_OUTGOING
 from envelope.core.message import Message
@@ -29,15 +31,27 @@ class BatchSchema(BaseModel):
     payloads: list[dict | BaseModel | None]
 
 
-@add_message(WS_OUTGOING)
-class Batch(Message):
-    name = "s.batch"
-    schema = BatchSchema
-    data: BatchSchema
+class BatchMessage(Message, ABC):
     allow_batch = False
 
     @classmethod
-    def start(self, msg: Message):
+    @abstractmethod
+    def start(cls, msg: Message):
+        ...
+
+    @abstractmethod
+    def append(self, msg: Message):
+        ...
+
+
+@add_message(WS_OUTGOING)
+class Batch(BatchMessage):
+    name = "s.batch"
+    schema = BatchSchema
+    data: BatchSchema
+
+    @classmethod
+    def start(cls, msg: Message):
         """
         >>> from envelope.tests.helpers import WebsocketHello
         >>> hello = WebsocketHello()
@@ -54,7 +68,8 @@ class Batch(Message):
             payloads = [None]
         else:
             payloads = [msg.data]
-        return Batch.from_message(msg, data={"t": msg.name, "payloads": payloads})
+        # Transform to batch, keep mm, state etc
+        return Batch(mm=msg.mm, data={"t": msg.name, "payloads": payloads})
 
     def append(self, msg: Message):
         """
@@ -97,14 +112,13 @@ class Batch2Schema(BaseModel):
 
 
 @add_message(WS_OUTGOING)
-class Batch2(Message):
+class Batch2(BatchMessage):
     name = "s.batch2"
     schema = Batch2Schema
     data: Batch2Schema
-    allow_batch = False
 
     @classmethod
-    def start(self, msg: Message, common: dict | None = None):
+    def start(cls, msg: Message, common: dict | None = None):
         """
         >>> from envelope.tests.helpers import WebsocketHello
         >>> hello = WebsocketHello()
@@ -120,8 +134,8 @@ class Batch2(Message):
         """
         if msg.data:
             data = msg.data.dict()
-            return Batch2.from_message(
-                msg,
+            return Batch2(
+                mm=msg.mm,
                 data={
                     "t": msg.name,
                     "keys": list(data.keys()),
@@ -129,8 +143,8 @@ class Batch2(Message):
                     "common": common,
                 },
             )
-        return Batch2.from_message(
-            msg, data={"t": msg.name, "values": [None], "common": common}
+        return Batch2(
+            mm=msg.mm, data={"t": msg.name, "values": [None], "common": common}
         )
 
     def append(self, msg: Message):
