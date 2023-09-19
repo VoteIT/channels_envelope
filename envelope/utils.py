@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from collections import UserList
 from datetime import datetime
 from itertools import groupby
 from typing import TYPE_CHECKING
@@ -18,11 +20,15 @@ from envelope import WS_OUTGOING
 from envelope.models import Connection
 
 if TYPE_CHECKING:
+    from django.db.models import Model
+    from django.db.models import QuerySet
     from envelope.core.message import ErrorMessage
     from envelope.core.message import Message
     from envelope.core.envelope import Envelope
     from envelope.registries import MessageRegistry
     from envelope.messages.common import BatchMessage
+    from rest_framework.serializers import Serializer
+
 
 # FIXME: Selectable later on
 channel_layer = get_channel_layer()
@@ -81,8 +87,6 @@ def get_sender_util() -> type[SenderUtil]:
         sender_util_name = getattr(settings, "ENVELOPE_SENDER_UTIL")
         return import_string(sender_util_name)
     except AttributeError:
-        from envelope.utils import SenderUtil
-
         return SenderUtil
 
 
@@ -337,6 +341,57 @@ def websocket_send_error(
         group=group,
     )
     sender()
+
+
+def get_message_type(message_name: str, _registry: str) -> type[Message]:
+    reg = get_message_registry(_registry)
+    return reg[message_name]
+
+
+class AppState(UserList):
+    """
+    Attach several messages to a subscribed response. It's built for websocket application states.
+    """
+
+    def append(self, item: Message) -> None:
+        """
+        Append an outgoing message to another message. Used by pubsub and similar.
+        """
+        assert (
+            WS_OUTGOING in item.registries()
+        ), f"{item} is not registered as an outgoing websocket message"
+        item.validate()  # In case it wasn't done before
+        super().append(
+            dict(
+                t=item.name,
+                p=item.data,
+            )
+        )
+
+    def append_from(
+        self,
+        instance: Model,
+        serializer_class: type[Serializer],
+        message_class: type[Message],
+    ):
+        """
+        Insert outgoing message from instance, using DRF serializer and message_class
+        """
+        data = serializer_class(instance).data
+        self.append(message_class(data=data))
+
+    def append_from_queryset(
+        self,
+        queryset: QuerySet,
+        serializer_class: type[Serializer],
+        message_class: type[Message],
+    ):
+        """
+        Insert outgoing messages from queryset, using DRF serializer and message class
+        """
+        serializer = serializer_class(queryset, many=True)
+        for item in serializer.data:
+            self.append(message_class(data=item))
 
 
 def get_or_create_txn_sender(

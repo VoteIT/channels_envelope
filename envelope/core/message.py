@@ -77,7 +77,10 @@ class Message(MessageStates, ABC):
 
 
 class ErrorMessage(Message, Exception, ABC):
-    ...
+    def __str__(self):
+        return "\n" + "\n".join(
+            f"{k}:\n    {v}" for k, v in self.data.dict(exclude_unset=True).items()
+        )
 
 
 class AsyncRunnable(Message, ABC):
