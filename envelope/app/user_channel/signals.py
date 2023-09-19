@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 @receiver(client_connect)
-def subscribe_client_to_users_channel(instance: Connection, **kw):
+def subscribe_client_to_users_channel(*, instance: Connection, **kw):
     user_channel = UserChannel.from_instance(
         instance.user, consumer_channel=instance.channel_name
     )
@@ -22,6 +22,7 @@ def subscribe_client_to_users_channel(instance: Connection, **kw):
 
 @receiver(client_close)
 def leave_users_channel(
+    *,
     instance: Connection,
     close_code: int | None,
     **kw,

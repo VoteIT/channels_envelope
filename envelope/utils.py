@@ -357,10 +357,6 @@ class AppState(UserList):
         """
         Append an outgoing message to another message. Used by pubsub and similar.
         """
-        assert (
-            WS_OUTGOING in item.registries()
-        ), f"{item} is not registered as an outgoing websocket message"
-        item.validate()  # In case it wasn't done before
         super().append(
             dict(
                 t=item.name,

@@ -455,7 +455,7 @@ so let's just add a superuser to test against.
 
 
 >>> from typing import Optional
->>> from envelope.core.message import ContextAction
+>>> from envelope.deferred_jobs.message import ContextAction
 
 >>> class UpdateUserSchema(BaseModel):
 ...     pk: int
@@ -504,7 +504,7 @@ If we run assert_perm instead we'll get an exception with some details.
 
 >>> jane_doe.is_superuser = False
 >>> jane_doe.save()
->>> from envelope.messages.errors import UnauthorizedError
+>>> from envelope.core.errors import UnauthorizedError
 
 Messages cache user objects, we'll simply refresh it
 
