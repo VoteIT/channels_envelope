@@ -18,14 +18,10 @@ class TransactionSenderIntegrationTests(TestCase):
         self.failUnless(mock_send.called)
         data = mock_send.call_args[0][1]
         self.assertEqual("s.batch2", data["t"])
+        self.assertEqual("websocket.send", data["type"])
         self.assertEqual(
-            {
-                "common": None,
-                "keys": ["curr", "total", "msg"],
-                "t": "progress.num",
-                "values": [[1, 3, None], [2, 3, None], [3, 3, None]],
-            },
-            data["p"],
+            '{"t": "s.batch2", "p": {"t": "progress.num", "common": null, "keys": ["curr", "total", "msg"], "values": [[1, 3, null], [2, 3, null], [3, 3, null]]}, "i": null, "s": null}',
+            data["text_data"],
         )
         # and channel fetched from initial message
         self.assertEqual("abc", mock_send.call_args[0][0])

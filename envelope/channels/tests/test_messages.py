@@ -276,11 +276,11 @@ class RecheckChannelSubscriptionsTests(TestCase):
         payload = mocked_send.mock_calls[0].args[1]
         self.assertEqual(
             {
-                "t": "channel.left",
-                "p": {"pk": -1, "channel_type": "user"},
-                "i": None,
-                "s": "s",
+                "text_data": '{"t": "channel.left", "p": {"pk": -1, "channel_type": "user"}, "i": null, "s": "s"}',
                 "type": "websocket.send",
+                "i": None,
+                "t": "channel.left",
+                "s": "s",
             },
             payload,
         )

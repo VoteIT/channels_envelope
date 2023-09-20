@@ -6,4 +6,4 @@
 .idea
 venv
 volumes
-dist
+_envelope
