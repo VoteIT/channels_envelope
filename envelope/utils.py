@@ -460,9 +460,6 @@ class TransactionSender:
                         batch,
                         channel_name=initial_util.channel_name,
                         group=initial_util.group,
-                        # as_dict=initial_util.as_dict,
-                        # run_handlers=initial_util.run_handlers,
-                        # state=initial_util.state,
                     )
                 ]
             data.extend(items)

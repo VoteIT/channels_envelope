@@ -137,11 +137,12 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             return
         incoming = get_envelope(WS_INCOMING)
         try:
-            message = incoming.unpack(text_data, consumer=self)
+            data = incoming.parse(text_data)
         except self.validation_exc as exc:
             # FIXME: Count errors
             error = self.validation_exc(errors=exc.errors())
             return await self.send_ws_error(error)
+        message = incoming.unpack(data, consumer=self)
         self.last_received = now()
         self.event_logger.debug("Received", consumer=self, message=message)
         # Catch exceptions here?
@@ -191,9 +192,9 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         """
         self.last_sent = now()
         outgoing = get_envelope(WS_OUTGOING)
-        data = outgoing.schema(**event)
-        msg_class = outgoing.registry.get(data.t)
+        msg_class = outgoing.registry.get(event["t"])
         if outgoing.message_signal and outgoing.message_signal.has_listeners(msg_class):
+            data = outgoing.parse(event["text_data"])
             message = outgoing.unpack(data, consumer=self)
             self.event_logger.debug("websocket_send", consumer=self, message=message)
             await outgoing.message_signal.send(
@@ -201,11 +202,11 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             )
         else:
             self.event_logger.debug(
-                f"websocket_send message type {data.t} without listeners",
+                f"websocket_send message type {event['t']} without listeners",
                 consumer=self,
             )
-        text_data = data.json()
-        await self.send(text_data=text_data)
+        # text_data = data.json()
+        await self.send(text_data=event["text_data"])
 
     async def ws_error_send(self, event: dict):
         """

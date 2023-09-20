@@ -31,7 +31,6 @@ class MessageMeta(BaseModel):
     registry: str | None
 
     class Config:
-        extra = "forbid"
         allow_population_by_field_name = True
 
 

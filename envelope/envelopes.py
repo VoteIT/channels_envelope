@@ -8,6 +8,7 @@ from envelope import WS_SEND_TRANSPORT
 from envelope import async_signals
 from envelope.core.envelope import DictTransport
 from envelope.core.envelope import Envelope
+from envelope.core.envelope import TextTransport
 from envelope.schemas import EnvelopeSchema
 from envelope.schemas import ErrorEnvelopeSchema
 from envelope.schemas import IncomingEnvelopeSchema
@@ -23,7 +24,7 @@ incoming = Envelope(
 outgoing = Envelope(
     schema=OutgoingEnvelopeSchema,
     registry_name=WS_OUTGOING,
-    transport=DictTransport(WS_SEND_TRANSPORT),
+    transport=TextTransport(WS_SEND_TRANSPORT),
     message_signal=async_signals.outgoing_websocket_message,
     allow_batch=True,
 )

@@ -33,16 +33,16 @@ class Transport(ABC):
         ...
 
 
-# class TextTransport(Transport):
-#     def __call__(self, envelope: Envelope, message: Message) -> dict:
-#         packed = envelope.pack(message)
-#         return {
-#             "text_data": packed.json(),
-#             "type": self.type_name,
-#             "i": packed.i,
-#             "t": packed.t,
-#             "s": getattr(packed, "s", None),
-#         }
+class TextTransport(Transport):
+    def __call__(self, envelope: Envelope, message: Message) -> dict:
+        packed = envelope.pack(message)
+        return {
+            "text_data": packed.json(),
+            "type": self.type_name,
+            "i": packed.i,
+            "t": packed.t,
+            "s": getattr(packed, "s", None),
+        }
 
 
 class DictTransport(Transport):
@@ -83,7 +83,7 @@ class Envelope:
     def registry(self):
         return get_message_registry(self.registry_name)
 
-    def parse(self, text_data: str) -> BaseModel:
+    def parse(self, text_data: str) -> EnvelopeSchema:
         """
         >>> env = Envelope(schema=EnvelopeSchema, registry_name='testing')
         >>> txt = '{"t": "msg.name"}'
