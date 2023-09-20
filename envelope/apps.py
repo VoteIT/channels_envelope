@@ -24,13 +24,10 @@ class ChannelsEnvelopeConfig(AppConfig):
 
     def ready(self):
         from envelope.envelopes import register_envelopes
+        from envelope.messages import register_messages
 
         register_envelopes()
-
-        from envelope.messages.errors import register_errors
-
-        register_errors()
-
+        register_messages()
         self.check_settings_and_import()
         self.check_consumer_settings()
         self.check_registries_names()

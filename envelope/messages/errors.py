@@ -7,7 +7,7 @@ from pydantic import validator
 from envelope import ERRORS
 from envelope import Error
 from envelope.core.message import ErrorMessage
-from envelope.utils import add_messages
+from envelope.decorators import add_message
 
 
 class ErrorSchema(BaseModel):
@@ -24,6 +24,7 @@ class ValidationErrorSchema(ErrorSchema):
     errors: list[dict]
 
 
+@add_message(ERRORS)
 class ValidationErrorMsg(ErrorMessage):
     name = Error.VALIDATION
     schema = ValidationErrorSchema
@@ -35,12 +36,14 @@ class MessageTypeErrorSchema(ErrorSchema):
     registry: str
 
 
+@add_message(ERRORS)
 class MessageTypeError(ErrorMessage):
     name = Error.MSG_TYPE
     schema = MessageTypeErrorSchema
     data: MessageTypeErrorSchema
 
 
+@add_message(ERRORS)
 class BadRequestError(GenericError):
     """
     Pretty much HTTP 400
@@ -80,6 +83,7 @@ class NotFoundSchema(BaseModel):
         )
 
 
+@add_message(ERRORS)
 class NotFoundError(ErrorMessage):
     name = Error.NOT_FOUND
     schema = NotFoundSchema
@@ -113,19 +117,8 @@ class UnauthorizedSchema(NotFoundSchema):
         return v
 
 
+@add_message(ERRORS)
 class UnauthorizedError(ErrorMessage):
     name = Error.UNAUTHORIZED
     schema = UnauthorizedSchema
     data: UnauthorizedSchema
-
-
-def register_errors():
-    add_messages(
-        ERRORS,
-        GenericError,
-        ValidationErrorMsg,
-        MessageTypeError,
-        BadRequestError,
-        NotFoundError,
-        UnauthorizedError,
-    )

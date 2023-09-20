@@ -64,7 +64,7 @@ class Subscribe(ChannelCommand, DeferredJob):
         if app_state:
             return list(app_state)
 
-    async def pre_queue(self, consumer: WebsocketConsumer) -> Subscribed:
+    async def pre_queue(self, consumer: WebsocketConsumer, **kwargs) -> Subscribed:
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
