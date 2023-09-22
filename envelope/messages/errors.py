@@ -33,7 +33,7 @@ class ValidationErrorMsg(ErrorMessage):
 
 class MessageTypeErrorSchema(ErrorSchema):
     type_name: str
-    registry: str
+    envelope: str
 
 
 @add_message(ERRORS)

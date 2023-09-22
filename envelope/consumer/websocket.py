@@ -25,7 +25,6 @@ from envelope.consumer.utils import get_language
 from envelope.logging import getEventLogger
 from envelope.schemas import MessageMeta
 from envelope.utils import get_envelope
-from envelope.utils import get_envelope_from_message
 from envelope.utils import get_error_type
 
 if TYPE_CHECKING:
@@ -158,7 +157,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         #    raise TypeError("error is not an ErrorMessage instance")
 
         self.last_error = now()
-        errors = get_envelope_from_message(error)
+        errors = get_envelope(ERRORS)
         if errors.message_signal:
             await errors.message_signal.send(
                 sender=error.__class__, message=error, consumer=self
@@ -169,13 +168,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=text_data)
 
     async def send_ws_message(self, message: Message):
-        # from envelope.core.message import Message
-        #
-        # if not isinstance(message, Message):
-        #    raise TypeError("message is not a Message instance")
-
-        message.mm.registry = WS_OUTGOING
-        outgoing = get_envelope_from_message(message)
+        outgoing = get_envelope(WS_OUTGOING)
         self.event_logger.debug("Sending ws", consumer=self, message=message)
         if outgoing.message_signal:
             await outgoing.message_signal.send(

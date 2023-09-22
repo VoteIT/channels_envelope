@@ -20,25 +20,25 @@ __all__ = ("register_envelopes",)  # Should be done via settings instead
 
 incoming = Envelope(
     schema=IncomingEnvelopeSchema,
-    registry_name=WS_INCOMING,
+    name=WS_INCOMING,
     message_signal=async_signals.incoming_websocket_message,
 )
 outgoing = Envelope(
     schema=OutgoingEnvelopeSchema,
-    registry_name=WS_OUTGOING,
+    name=WS_OUTGOING,
     transport=TextTransport(WS_SEND_TRANSPORT),
     message_signal=async_signals.outgoing_websocket_message,
     allow_batch=True,
 )
 internal = Envelope(
     schema=EnvelopeSchema,
-    registry_name=INTERNAL,
+    name=INTERNAL,
     transport=DictTransport(INTERNAL_TRANSPORT),
     message_signal=async_signals.incoming_internal_message,
 )
 errors = Envelope(
     schema=ErrorEnvelopeSchema,
-    registry_name=ERRORS,
+    name=ERRORS,
     transport=DictTransport(WS_SEND_ERROR_TRANSPORT),
     message_signal=async_signals.outgoing_websocket_error,
 )

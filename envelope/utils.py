@@ -62,12 +62,6 @@ def get_envelope(name) -> Envelope:
     return envelope_registry[name]
 
 
-def get_envelope_from_message(message: Message) -> Envelope:
-    if message.mm.registry is None:
-        raise ValueError(f"{message} doesn't seem to have registry set")
-    return get_envelope(message.mm.registry)
-
-
 def get_batch_message() -> type[BatchMessage]:
     try:
         batch_message_name = getattr(settings, "ENVELOPE_BATCH_MESSAGE")
@@ -96,7 +90,7 @@ def add_envelopes(*envelopes: Envelope):
     >>> from envelope.core.envelope import Envelope
     >>> from envelope.schemas import EnvelopeSchema
 
-    >>> add_envelopes(Envelope(schema=EnvelopeSchema, registry_name='hello'))
+    >>> add_envelopes(Envelope(schema=EnvelopeSchema, name='hello'))
     >>> 'hello' in envelope_registry
     True
     >>> 'hello' in message_registry
@@ -110,8 +104,8 @@ def add_envelopes(*envelopes: Envelope):
     from envelope.registries import message_registry
 
     for envelope in envelopes:
-        envelope_registry[envelope.registry_name] = envelope
-        message_registry.setdefault(envelope.registry_name, {})
+        envelope_registry[envelope.name] = envelope
+        message_registry.setdefault(envelope.name, {})
 
 
 def add_messages(namespace: str, *messages: type[Message]):
@@ -161,14 +155,16 @@ class SenderUtil:
     def __init__(
         self,
         message: Message,
+        envelope: Envelope | str,
         *,
         channel_name: str,
         group: bool = False,
-        layer_name: str | None = None,
+        # layer_name: str | None = None,
     ):
-
         self.message = message
-        self.envelope = get_envelope_from_message(message)
+        if isinstance(envelope, str):
+            envelope = get_envelope(envelope)
+        self.envelope = envelope
         self.channel_name = channel_name
         self.group = group
 
@@ -180,7 +176,7 @@ class SenderUtil:
         """
         Everything that makes message groupable
         """
-        return f"{self.message.name}{self.channel_name}{self.message.mm.registry}{self.message.mm.state and self.message.mm.state or ''}{int(self.group)}"
+        return f"{self.message.name}{self.channel_name}{self.envelope.name}{self.message.mm.state and self.message.mm.state or ''}{int(self.group)}"
 
     @property
     def batch(self) -> bool:
@@ -246,10 +242,10 @@ def websocket_send(
         channel_name = message.mm.consumer_name
     if state is not None:
         message.mm.state = state
-    message.mm.registry = WS_OUTGOING
     sender = get_sender_util()(
         message,
         channel_name=channel_name,
+        envelope=WS_OUTGOING,
         group=group,
     )
     if on_commit:
@@ -310,9 +306,9 @@ def internal_send(
         channel_name = message.mm.consumer_name
     if state is not None:
         message.mm.state = state
-    message.mm.registry = INTERNAL
     sender = get_sender_util()(
         message,
+        envelope=INTERNAL,
         channel_name=channel_name,
         group=group,
     )
@@ -332,10 +328,9 @@ def websocket_send_error(
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
     """
-
-    error.mm.registry = ERRORS
     sender = get_sender_util()(
         error,
+        envelope=ERRORS,
         channel_name=channel_name,
         group=group,
     )
@@ -413,7 +408,7 @@ def get_or_create_txn_sender(
         if raise_exception:
             raise TransactionManagementError("Not an atomic block")
         return
-    for (_, _callable) in conn.run_on_commit:
+    for _, _callable in conn.run_on_commit:
         if isinstance(_callable, TransactionSender):
             return _callable
     txn_sender = TransactionSender()
@@ -457,6 +452,7 @@ class TransactionSender:
                 items = [
                     self.sender_util(
                         batch,
+                        envelope=initial_util.envelope,
                         channel_name=initial_util.channel_name,
                         group=initial_util.group,
                     )

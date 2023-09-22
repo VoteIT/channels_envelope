@@ -33,7 +33,7 @@ testing_channel_layers_setting = {
 
 testing_envelope = Envelope(
     schema=OutgoingEnvelopeSchema,
-    registry_name=TESTING_NS,
+    name=TESTING_NS,
     transport=DictTransport(WS_SEND_TRANSPORT),
     allow_batch=True,
 )

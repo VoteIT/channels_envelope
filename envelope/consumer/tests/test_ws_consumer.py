@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
 from django.test import override_settings
 
+from envelope import INTERNAL
 from envelope.app.user_channel.channel import UserChannel
 from envelope.async_signals import consumer_connected
 from envelope.async_signals import incoming_internal_message
@@ -14,7 +15,6 @@ from envelope.channels.messages import Leave
 from envelope.channels.messages import ListSubscriptions
 from envelope.channels.testing import ForceSubscribe
 from envelope.envelopes import incoming
-from envelope.envelopes import internal
 from envelope.envelopes import outgoing
 from envelope.messages.errors import MessageTypeError
 from envelope.messages.errors import ValidationErrorMsg
@@ -181,7 +181,7 @@ class WebsocketConsumerTests(TransactionTestCase):
             response = await communicator.receive_from()
 
         self.assertEqual(
-            '{"t": "error.msg_type", "p": {"msg": null, "type_name": "jeff", "registry": "ws_incoming"}, "i": null, "s": "f"}',
+            '{"t": "error.msg_type", "p": {"msg": null, "type_name": "jeff", "envelope": "ws_incoming"}, "i": null, "s": "f"}',
             response,
         )
         self.assertTrue(self.signal_was_fired)
@@ -191,10 +191,8 @@ class WebsocketConsumerTests(TransactionTestCase):
         self.signal_was_fired = False
         communicator = await self._mk_connection()
         consumer_name = await self.get_consumer_name(communicator)
-        msg = SendClientInfo(
-            mm={"consumer_name": consumer_name, "registry": internal.registry_name}
-        )
-        sender = get_sender_util()(msg, channel_name=consumer_name)
+        msg = SendClientInfo(mm={"consumer_name": consumer_name})
+        sender = get_sender_util()(msg, channel_name=consumer_name, envelope=INTERNAL)
 
         async def msg_check(*, sender, message, **kwargs):
             self.assertIsInstance(message, SendClientInfo)

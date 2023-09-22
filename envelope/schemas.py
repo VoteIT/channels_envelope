@@ -18,9 +18,6 @@ class MessageMeta(BaseModel):
     consumer_name:
         The consumers name (id) this message passed. Any reply to the author (for instance an error message)
         should be directed here.
-
-    registry:
-        Which registry this was created from.
     """
 
     id: str | None = Field(alias="i")
@@ -28,7 +25,6 @@ class MessageMeta(BaseModel):
     consumer_name: str | None
     language: str | None = Field(alias="l")
     state: str | None = Field(alias="s")
-    registry: str | None
 
     class Config:
         allow_population_by_field_name = True

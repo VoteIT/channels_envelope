@@ -15,7 +15,6 @@ class EventLoggerAdapter(logging.LoggerAdapter):
         if message:
             kwargs["extra"]["i"] = message.mm.id
             kwargs["extra"]["t"] = message.name
-            kwargs["extra"]["reg"] = message.mm.registry
             kwargs["extra"]["user"] = message.mm.user_pk
             # May be overwritten if consumer is passed
             kwargs["extra"]["consumer_name"] = message.mm.consumer_name

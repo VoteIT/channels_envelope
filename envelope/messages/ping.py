@@ -12,17 +12,16 @@ if TYPE_CHECKING:
     from envelope.consumer.websocket import WebsocketConsumer
 
 
-@add_message(WS_INCOMING, WS_OUTGOING)
+@add_message(WS_INCOMING, INTERNAL)
 class Ping(AsyncRunnable):
     name = "s.ping"
 
     async def run(self, *, consumer: WebsocketConsumer, **kwargs):
         assert consumer
-        if self.mm.registry != WS_OUTGOING:
-            response = Pong.from_message(self, state=self.SUCCESS)
-            await consumer.send_ws_message(response)
+        response = Pong.from_message(self, state=self.SUCCESS)
+        await consumer.send_ws_message(response)
 
 
-@add_message(WS_INCOMING, WS_OUTGOING, INTERNAL)
+@add_message(WS_OUTGOING)
 class Pong(Message):
     name = "s.pong"
