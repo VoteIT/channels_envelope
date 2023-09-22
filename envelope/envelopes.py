@@ -16,6 +16,8 @@ from envelope.schemas import OutgoingEnvelopeSchema
 from envelope.utils import add_envelopes
 
 __all__ = ("register_envelopes",)  # Should be done via settings instead
+
+
 incoming = Envelope(
     schema=IncomingEnvelopeSchema,
     registry_name=WS_INCOMING,

@@ -30,10 +30,6 @@ if TYPE_CHECKING:
     from rest_framework.serializers import Serializer
 
 
-# FIXME: Selectable later on
-channel_layer = get_channel_layer()
-
-
 def get_global_message_registry() -> MessageRegistry:
     from envelope.registries import message_registry
 
@@ -196,6 +192,7 @@ class SenderUtil:
                 f"Don't know how to send message {self.message} since envelope {self.message} lacks transport"
             )
         payload = self.envelope.transport(self.envelope, self.message)
+        channel_layer = get_channel_layer()
         if self.group:
             await channel_layer.group_send(self.channel_name, payload)
         else:
@@ -218,6 +215,7 @@ def websocket_send(
     >>> msg = Pong(mm={'consumer_name': 'abc'})
 
     This method can send straight away regardless of transactions
+    >>> channel_layer = get_channel_layer()
     >>> with mock.patch.object(channel_layer, 'send') as mock_send:
     ...     websocket_send(msg, channel_name='a-channel', on_commit=False)
     ...     mock_send.called
@@ -281,6 +279,7 @@ def internal_send(
     >>> msg = Pong(mm={'consumer_name': 'abc'})
 
     This method can send straight away regardless of transactions
+    >>> channel_layer = get_channel_layer()
     >>> with mock.patch.object(channel_layer, 'send') as mock_send:
     ...     internal_send(msg, channel_name='a-channel', on_commit=False)
     ...     mock_send.called

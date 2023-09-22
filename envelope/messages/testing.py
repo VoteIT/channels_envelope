@@ -1,8 +1,13 @@
-# from __future__ import annotations
+from __future__ import annotations
+
 #
 # from time import sleep
-# from typing import Optional
-# from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING
+
+from pydantic import BaseModel
+
+from envelope import WS_INCOMING
+
 #
 # from django.conf import settings
 # from django.core.exceptions import ImproperlyConfigured
@@ -13,20 +18,24 @@
 # from pydantic import validator
 #
 # from envelope import WS_INCOMING
-# from envelope import WS_OUTGOING
-# from envelope.core.message import Message
-# from envelope.decorators import add_message
+from envelope import WS_OUTGOING
+from envelope import INTERNAL
+from envelope.core.message import AsyncRunnable
+from envelope.core.message import Message
+from envelope.decorators import add_message
+
 # from envelope.messages.common import ProgressNum
 #
 # from envelope.utils import websocket_send
 #
-# if TYPE_CHECKING:
-#     from envelope.consumer.websocket import WebsocketConsumer
+if TYPE_CHECKING:
+    from envelope.consumer.websocket import WebsocketConsumer
 #
 # if not settings.DEBUG:
 #     raise ImproperlyConfigured(
 #         "%s should never be imported unless DEBUG mode is on." % __name__
 #     )
+from envelope.core.message import Message
 
 
 # @receiver(client_connect)
@@ -102,3 +111,24 @@
 #             sleep(1)
 #         msg = ProgressNum.from_message(self, curr=num, total=num, msg="All done!")
 #         websocket_send(msg, self.mm.consumer_name, state=self.SUCCESS, on_commit=False)
+
+
+@add_message(INTERNAL, WS_INCOMING)
+class SendClientInfo(AsyncRunnable):
+    name = "s.send_client_info"
+
+    async def run(self, *, consumer: WebsocketConsumer, **kwargs):
+        response = ClientInfo.from_message(self, consumer_name=consumer.channel_name)
+        await consumer.send_ws_message(response)
+        return response
+
+
+class ClientInfoSchema(BaseModel):
+    consumer_name: str
+
+
+@add_message(WS_OUTGOING)
+class ClientInfo(Message):
+    data: ClientInfoSchema
+    schema = ClientInfoSchema
+    name = "s.client_info"

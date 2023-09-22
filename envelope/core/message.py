@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.utils.functional import cached_property
 from pydantic import BaseModel
 
+from envelope import ERRORS
 from envelope import MessageStates
 from envelope.async_signals import incoming_internal_message
 from envelope.async_signals import incoming_websocket_message
@@ -77,6 +78,19 @@ class Message(MessageStates, ABC):
 
 
 class ErrorMessage(Message, Exception, ABC):
+    def __init__(
+        self,
+        *,
+        mm: dict | MessageMeta = None,
+        data: dict | None = None,
+        **kwargs,
+    ):
+        super().__init__(mm=mm, data=data, **kwargs)
+        self.mm.registry = ERRORS
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}{self}"
+
     def __str__(self):
         return "\n" + "\n".join(
             f"{k}:\n    {v}" for k, v in self.data.dict(exclude_unset=True).items()

@@ -9,11 +9,13 @@ from pydantic import BaseModel
 
 from envelope import ERRORS
 from envelope import Error
+from envelope.logging import getEventLogger
 from envelope.schemas import EnvelopeSchema
 from envelope.utils import get_error_type
 from envelope.utils import get_message_registry
 
 if TYPE_CHECKING:
+    from envelope.logging import EventLoggerAdapter
     from envelope.consumer.websocket import WebsocketConsumer
     from envelope.core.message import Message
     from envelope.registries import MessageRegistry
@@ -53,6 +55,9 @@ class DictTransport(Transport):
         return data
 
 
+_default = object()
+
+
 class Envelope:
     name: str
     schema: type[EnvelopeSchema]
@@ -61,12 +66,14 @@ class Envelope:
     allow_batch: bool = False
     transport: Transport | None
     message_signal: Signal | None
+    logger: EventLoggerAdapter
 
     def __init__(
         self,
         *,
         schema: type[EnvelopeSchema],
         registry_name: str,
+        logger_name=_default,
         transport: Transport | None = None,
         allow_batch: bool = False,
         message_signal: Signal | None = None,
@@ -78,6 +85,9 @@ class Envelope:
         self.allow_batch = allow_batch
         self.transport = transport
         self.message_signal = message_signal
+        if logger_name == _default:
+            logger_name = "envelope." + registry_name + ".event"
+        self.logger = getEventLogger(logger_name)
 
     @property
     def registry(self):

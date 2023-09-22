@@ -9,10 +9,6 @@ def get_queue_or_default(attr: str, default=DEFAULT_QUEUE_NAME, **kwargs) -> Que
     try:
         name = getattr(settings, attr)
     except AttributeError:
-        name = DEFAULT_QUEUE_NAME
+        name = default
     if name is not None:
         return get_queue(name, **kwargs)
-
-
-CONNECTIONS_QUEUE = get_queue_or_default("ENVELOPE_CONNECTIONS_QUEUE")
-TIMESTAMP_QUEUE = get_queue_or_default("ENVELOPE_TIMESTAMP_QUEUE")

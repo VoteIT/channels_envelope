@@ -22,6 +22,7 @@ from envelope.core.envelope import DictTransport
 from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
 from envelope.decorators import add_message
+from envelope.logging import getEventLogger
 from envelope.schemas import OutgoingEnvelopeSchema
 from envelope.utils import add_envelopes
 

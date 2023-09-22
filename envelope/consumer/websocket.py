@@ -12,6 +12,7 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import AnonymousUser
 from django.utils.timezone import now
 from django.utils.translation import activate
+from pydantic import ValidationError
 
 from envelope import ERRORS
 from envelope import Error
@@ -30,10 +31,13 @@ from envelope.utils import get_error_type
 if TYPE_CHECKING:
     from envelope.core.message import ErrorMessage
     from envelope.core.message import Message
+    from envelope.messages.errors import ValidationErrorMsg
     from envelope.channels.schemas import ChannelSchema
+    from envelope.logging import EventLoggerAdapter
 
 __all__ = ("WebsocketConsumer",)
-event_logger = getEventLogger(__name__ + ".event")
+
+default_event_logger = getEventLogger(__name__ + ".event")
 
 
 class WebsocketConsumer(AsyncWebsocketConsumer):
@@ -55,21 +59,17 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
     connection_update_interval: timedelta | None = None
     subscriptions: set[ChannelSchema]
     language: str | None = None
-    # Connection signals - deferred to RQ job, so we can use sync code
-    #    connect_signal_job = None
-    #    close_signal_job = None
-    # Logger, so we can override it
-    # logger: Logger = logger
-    # Event logger
-    event_logger = event_logger
     # Allow anon? FIXME: Settable later on
     allow_anon_connections = False
+    event_logger: EventLoggerAdapter
 
     def __init__(
         self,
+        event_logger: EventLoggerAdapter = default_event_logger,
         **kwargs,  # Default to setting,
     ):
         super().__init__(**kwargs)
+        self.event_logger = event_logger
         self.subscriptions = set()
         seconds = getattr(settings, "ENVELOPE_CONNECTION_UPDATE_INTERVAL", 180)
         if seconds:
@@ -78,7 +78,13 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         self.last_job = self.last_sent = self.last_received = now()
 
     @property
-    def validation_exc(self):
+    def base_error(self) -> type[ErrorMessage]:
+        from envelope.core.message import ErrorMessage
+
+        return ErrorMessage
+
+    @property
+    def validation_err_msg(self) -> type[ValidationErrorMsg]:
         return get_error_type(Error.VALIDATION)
 
     async def connect(self):
@@ -91,7 +97,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             raise DenyConnection()
         self.user_pk = self.user.pk
         await self.accept()
-        self.event_logger.info(
+        self.event_logger.debug(
             "Connection accepted", consumer=self, extra=dict(lang=self.language)
         )
         await consumer_connected.send(sender=self.__class__, consumer=self)
@@ -105,15 +111,6 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
     # NOTE! database_sync_to_async doesn't work in tests - use mock to override
     async def get_user(self) -> AbstractUser | AnonymousUser:
         return await get_user(self.scope)
-
-    # def mark_subscribed(self, subscription: ChannelSchema):
-    #     # assert isinstance(subscription, ChannelSchema)
-    #     self.subscriptions.add(subscription)
-    #
-    # def mark_left(self, subscription: ChannelSchema):
-    #     # assert isinstance(subscription, ChannelSchema)
-    #     if subscription in self.subscriptions:
-    #         self.subscriptions.remove(subscription)
 
     def get_msg_meta(self, **kwargs) -> MessageMeta:
         """
@@ -138,13 +135,16 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         incoming = get_envelope(WS_INCOMING)
         try:
             data = incoming.parse(text_data)
-        except self.validation_exc as exc:
+        except ValidationError as exc:
             # FIXME: Count errors
-            error = self.validation_exc(errors=exc.errors())
+            error = self.validation_err_msg(errors=exc.errors())
             return await self.send_ws_error(error)
-        message = incoming.unpack(data, consumer=self)
+        try:
+            message = incoming.unpack(data, consumer=self)
+        except self.base_error as error:
+            return await self.send_ws_error(error)
         self.last_received = now()
-        self.event_logger.debug("Received", consumer=self, message=message)
+        incoming.logger.debug("Received", consumer=self, message=message)
         # Catch exceptions here?
         if incoming.message_signal:
             await incoming.message_signal.send(
@@ -152,10 +152,10 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             )
 
     async def send_ws_error(self, error: ErrorMessage):
-        from envelope.core.message import ErrorMessage
+        # from envelope.core.message import ErrorMessage
 
-        if not isinstance(error, ErrorMessage):
-            raise TypeError("error is not an ErrorMessage instance")
+        # if not isinstance(error, ErrorMessage):
+        #    raise TypeError("error is not an ErrorMessage instance")
 
         self.last_error = now()
         errors = get_envelope_from_message(error)
@@ -169,10 +169,10 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=text_data)
 
     async def send_ws_message(self, message: Message):
-        from envelope.core.message import Message
-
-        if not isinstance(message, Message):
-            raise TypeError("message is not a Message instance")
+        # from envelope.core.message import Message
+        #
+        # if not isinstance(message, Message):
+        #    raise TypeError("message is not a Message instance")
 
         message.mm.registry = WS_OUTGOING
         outgoing = get_envelope_from_message(message)
@@ -230,6 +230,18 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             )
         text_data = data.json()
         await self.send(text_data=text_data)
+
+    # async def send_internal(self, message: Message):
+    #     message.mm.registry = INTERNAL
+    #     internal = get_envelope_from_message(message)
+    #     self.event_logger.debug("Sending internal", consumer=self, message=message)
+    #     if internal.message_signal:
+    #         await internal.message_signal.send(
+    #             sender=message.__class__, message=message, consumer=self
+    #         )
+    #     envelope_data = internal.pack(message)
+    #     text_data = envelope_data.json()
+    #     await self.base_send({"type": "internal.msg", "text": text_data})
 
     async def internal_msg(self, event: dict):
         """

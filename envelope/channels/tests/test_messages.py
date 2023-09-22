@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
 from django.test import TestCase
@@ -21,7 +22,7 @@ from envelope.tests.helpers import TempSignal
 from envelope.tests.helpers import WebsocketHello
 from envelope.tests.helpers import mk_consumer
 from envelope.tests.helpers import testing_channel_layers_setting
-from envelope.utils import channel_layer
+
 
 User = get_user_model()
 
@@ -268,6 +269,7 @@ class RecheckChannelSubscriptionsTests(TestCase):
         sub_bad = ChannelSchema(pk=-1, channel_type=UserChannel.name)
         msg = self._mk_msg(user=self.user_one, subscriptions={sub_acceptable, sub_bad})
         msg.data.consumer_name = "abc"  # Set by pre_queue normally
+        channel_layer = get_channel_layer()
         with patch.object(channel_layer, "send") as mocked_send:
             with self.captureOnCommitCallbacks(execute=True):
                 response = msg.run_job()
