@@ -7,15 +7,15 @@ services:
       - ./volumes/redis:/data
     ports:
       - "16379:6379"
-  rqmonitor:
-    image: pranavgupta1234/rqmonitor
-    environment:
-      RQ_MONITOR_REDIS_URL: redis://redis:6379
-      RQ_MONITOR_DEBUG: 1
-    ports:
-      - "8899:8899"
+#  rqmonitor:
+#    image: pranavgupta1234/rqmonitor
+#    environment:
+#      RQ_MONITOR_REDIS_URL: redis://redis:6379
+#      RQ_MONITOR_DEBUG: 1
+#    ports:
+#      - "8899:8899"
 #  db:
-#    image: postgres:14
+#    image: postgres:14-alpine
 #    environment:
 #      POSTGRES_HOST_AUTH_METHOD: trust
 #    volumes:
