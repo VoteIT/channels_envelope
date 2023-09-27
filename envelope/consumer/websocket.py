@@ -10,6 +10,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import AnonymousUser
+from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django.utils.translation import activate
 from pydantic import ValidationError
@@ -76,13 +77,13 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         # Set timestamps
         self.last_job = self.last_sent = self.last_received = now()
 
-    @property
+    @cached_property
     def base_error(self) -> type[ErrorMessage]:
         from envelope.core.message import ErrorMessage
 
         return ErrorMessage
 
-    @property
+    @cached_property
     def validation_err_msg(self) -> type[ValidationErrorMsg]:
         return get_error_type(Error.VALIDATION)
 
