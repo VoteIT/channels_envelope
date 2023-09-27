@@ -20,7 +20,7 @@ from envelope import INTERNAL
 from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.async_signals import consumer_connected
-from envelope.async_signals import consumer_disconnected
+from envelope.async_signals import consumer_closed
 from envelope.consumer.utils import get_language
 from envelope.logging import getEventLogger
 from envelope.schemas import MessageMeta
@@ -103,7 +103,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         # https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
-        await consumer_disconnected.send(
+        await consumer_closed.send(
             sender=self.__class__, consumer=self, close_code=close_code
         )
 

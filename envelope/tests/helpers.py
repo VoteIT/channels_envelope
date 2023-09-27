@@ -166,3 +166,24 @@ def mk_consumer(consumer_name="abc", user=None, **kwargs):
         consumer.user = user
         consumer.user_pk = user.pk
     return consumer
+
+
+async def mk_communicator(client=None):
+    from envelope.consumer.websocket import WebsocketConsumer
+
+    headers = []
+    if client:
+        headers.extend(
+            [
+                (b"origin", b"..."),
+                (b"cookie", client.cookies.output(header="", sep="; ").encode()),
+            ]
+        )
+    communicator = WebsocketCommunicator(
+        AuthMiddlewareStack(WebsocketConsumer.as_asgi()),
+        "/testws/",
+        headers=headers,
+    )
+    connected, subprotocol = await communicator.connect()
+    assert connected
+    return communicator

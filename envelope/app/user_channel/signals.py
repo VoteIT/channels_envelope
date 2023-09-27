@@ -4,15 +4,15 @@ from typing import TYPE_CHECKING
 from asgiref.sync import async_to_sync
 from django.dispatch import receiver
 
-from envelope.signals import client_close
-from envelope.signals import client_connect
+from envelope.signals import connection_closed
+from envelope.signals import connection_created
 from envelope.app.user_channel.channel import UserChannel
 
 if TYPE_CHECKING:
     from envelope.models import Connection
 
 
-@receiver(client_connect)
+@receiver(connection_created)
 def subscribe_client_to_users_channel(*, instance: Connection, **kw):
     user_channel = UserChannel.from_instance(
         instance.user, consumer_channel=instance.channel_name
@@ -20,7 +20,7 @@ def subscribe_client_to_users_channel(*, instance: Connection, **kw):
     async_to_sync(user_channel.subscribe)()
 
 
-@receiver(client_close)
+@receiver(connection_closed)
 def leave_users_channel(
     *,
     instance: Connection,

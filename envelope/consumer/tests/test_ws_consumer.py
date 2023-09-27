@@ -1,5 +1,3 @@
-from channels.auth import AuthMiddlewareStack
-from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
 from django.test import override_settings
@@ -22,6 +20,7 @@ from envelope.messages.ping import Ping
 from envelope.messages.ping import Pong
 from envelope.messages.testing import SendClientInfo
 from envelope.tests.helpers import TempSignal
+from envelope.tests.helpers import mk_communicator
 from envelope.tests.helpers import mk_consumer
 from envelope.tests.helpers import testing_channel_layers_setting
 from envelope.utils import get_sender_util
@@ -47,20 +46,6 @@ class WebsocketConsumerTests(TransactionTestCase):
         kwargs.setdefault("user", self.user)
         return mk_consumer(**kwargs)
 
-    async def _mk_connection(self):
-        headers = [
-            (b"origin", b"..."),
-            (b"cookie", self.client.cookies.output(header="", sep="; ").encode()),
-        ]
-        communicator = WebsocketCommunicator(
-            AuthMiddlewareStack(self._cut.as_asgi()),
-            "/testws/",
-            headers=headers,
-        )
-        connected, subprotocol = await communicator.connect()
-        assert connected
-        return communicator
-
     async def get_consumer_name(self, communicator):
         msg = SendClientInfo()
         payload = incoming.pack(msg)
@@ -81,7 +66,7 @@ class WebsocketConsumerTests(TransactionTestCase):
 
         with TempSignal(consumer_connected, signal_check):
             # await communicator.send_to(text_data=text_data)
-            communicator = await self._mk_connection()
+            communicator = await mk_communicator(self.client)
 
         self.assertTrue(self.signal_was_fired)
         await communicator.disconnect()
@@ -93,7 +78,7 @@ class WebsocketConsumerTests(TransactionTestCase):
         msg = Ping(mm={"id": "a"})
         data = incoming.pack(msg)
         text_data = data.json()
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
 
         async def msg_check(*, sender, message, **kwargs):
             self.assertIsInstance(message, Ping)
@@ -113,7 +98,7 @@ class WebsocketConsumerTests(TransactionTestCase):
         msg = Ping(mm={"id": "a"})
         data = incoming.pack(msg)
         text_data = data.json()
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
 
         async def msg_check(*, sender, message, **kwargs):
             self.assertIsInstance(message, Pong)
@@ -130,7 +115,7 @@ class WebsocketConsumerTests(TransactionTestCase):
     async def test_incoming_missing_message_error(self):
         self.signal_was_fired = False
         text_data = "{}"
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
 
         async def msg_check(*, sender, message, **kwargs):
             self.assertIsInstance(message, ValidationErrorMsg)
@@ -150,7 +135,7 @@ class WebsocketConsumerTests(TransactionTestCase):
     async def test_empty_message(self):
         self.signal_was_fired = False
         text_data = " "
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
 
         async def msg_check(*, sender, message, **kwargs):
             self.assertIsInstance(message, ValidationErrorMsg)
@@ -170,7 +155,7 @@ class WebsocketConsumerTests(TransactionTestCase):
     async def test_message_type_missing(self):
         self.signal_was_fired = False
         text_data = '{"t": "jeff"}'
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
 
         async def msg_check(*, sender, message, **kwargs):
             self.assertIsInstance(message, MessageTypeError)
@@ -189,7 +174,7 @@ class WebsocketConsumerTests(TransactionTestCase):
 
     async def test_internal_msg(self):
         self.signal_was_fired = False
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
         consumer_name = await self.get_consumer_name(communicator)
         msg = SendClientInfo(mm={"consumer_name": consumer_name})
         sender = get_sender_util()(msg, channel_name=consumer_name, envelope=INTERNAL)
@@ -212,7 +197,7 @@ class WebsocketConsumerTests(TransactionTestCase):
 
     async def test_subscriptions_lifecycle(self):
         self.signal_was_fired = False
-        communicator = await self._mk_connection()
+        communicator = await mk_communicator(self.client)
         # Subscribe
         msg = ForceSubscribe(pk=self.user.pk, channel_type=UserChannel.name)
         payload = incoming.pack(msg)

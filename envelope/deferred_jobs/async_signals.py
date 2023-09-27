@@ -7,7 +7,7 @@ from async_signals import receiver
 from django.utils.timezone import now
 
 from envelope.async_signals import consumer_connected
-from envelope.async_signals import consumer_disconnected
+from envelope.async_signals import consumer_closed
 from envelope.async_signals import incoming_internal_message
 from envelope.async_signals import incoming_websocket_message
 from envelope.async_signals import outgoing_websocket_error
@@ -44,7 +44,7 @@ async def dispatch_connection_job(consumer: WebsocketConsumer, **kwargs):
         )
 
 
-@receiver(consumer_disconnected)
+@receiver(consumer_closed)
 async def dispatch_disconnection_job(
     consumer: WebsocketConsumer, close_code=None, **kwargs
 ):
@@ -60,7 +60,7 @@ async def dispatch_disconnection_job(
                 offline_at=now(),
             )
             logger.debug(
-                "'consumer_disconnected' signal 'dispatch_disconnection_job' to queue '%s' for consumer '%s'",
+                "'consumer_closed' signal 'dispatch_disconnection_job' to queue '%s' for consumer '%s'",
                 queue.name,
                 consumer.channel_name,
             )

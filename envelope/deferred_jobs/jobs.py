@@ -11,8 +11,8 @@ from django.utils.translation import activate
 from envelope import Error
 from envelope import WS_INCOMING
 from envelope.core.message import ErrorMessage
-from envelope.signals import client_close
-from envelope.signals import client_connect
+from envelope.signals import connection_closed
+from envelope.signals import connection_created
 from envelope.utils import get_envelope
 from envelope.utils import get_error_type
 from envelope.utils import update_connection_status
@@ -77,7 +77,7 @@ def create_connection_status_on_websocket_connect(
         online_at=online_at,
         last_action=online_at,  # Yes same
     )
-    client_connect.send(
+    connection_created.send(
         sender=connection.__class__,
         instance=connection,
         language=language,
@@ -102,7 +102,7 @@ def update_connection_status_on_websocket_close(
         consumer_name,
         close_code,
     )
-    client_close.send(
+    connection_closed.send(
         sender=connection.__class__,
         instance=connection,
         close_code=close_code,

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 from envelope.core.message import Message
 
 
-# @receiver(client_connect)
+# @receiver(connection_created)
 # def say_hello_at_connect(user, consumer_name, **kw):
 #     print("Active language in automatic greeting: ", translation.get_language())
 #     greeting = _("Hello %(username)s!") % {"username": user.username}

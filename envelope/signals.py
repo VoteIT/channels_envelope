@@ -18,5 +18,5 @@ channel_subscribed = Signal()
 #   sender          Connection class
 # Specifically for close:
 #   close_code      Websocket close code
-client_connect = Signal()
-client_close = Signal()
+connection_created = Signal()
+connection_closed = Signal()
