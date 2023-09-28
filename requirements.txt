@@ -1,3 +1,4 @@
 -e .[testing]
 #psycopg2-binary
 ipython
+tox

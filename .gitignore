@@ -4,6 +4,8 @@
 .DS_Store
 *.sqlite3
 .idea
+.tox
+build
 venv
 volumes
 _envelope

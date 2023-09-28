@@ -149,12 +149,12 @@ LOGGING = {
             "format": "%(asctime)s %(message)s",
             "datefmt": "%H:%M:%S",
         },
-        "json": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "format": "%(message)s",
-            "datefmt": "%H:%M:%S",
-            "timestamp": True,
-        },
+        # "json": {
+        #     "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+        #     "format": "%(message)s",
+        #     "datefmt": "%H:%M:%S",
+        #     "timestamp": True,
+        # },
     },
     "handlers": {
         "console": {
@@ -166,11 +166,11 @@ LOGGING = {
             "formatter": "rq_console",
             "exclude": ["%(asctime)s"],
         },
-        "json": {
-            "level": "DEBUG",
-            "class": "logging.StreamHandler",
-            "formatter": "json",
-        },
+        # "json": {
+        #     "level": "DEBUG",
+        #     "class": "logging.StreamHandler",
+        #     "formatter": "json",
+        # },
     },
     "root": {
         "handlers": ["console"],
@@ -184,7 +184,8 @@ LOGGING = {
         },
         "envelope": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "envelope.consumer.websocket.event": {
-            "handlers": ["json"],
+            # "handlers": ["json"],
+            "handlers": ["rq_console"],
             "level": "DEBUG",
             "propagate": False,
         },
