@@ -408,9 +408,10 @@ def get_or_create_txn_sender(
         if raise_exception:
             raise TransactionManagementError("Not an atomic block")
         return
-    for _, _callable in conn.run_on_commit:
-        if isinstance(_callable, TransactionSender):
-            return _callable
+    for x in conn.run_on_commit:
+        # Contains savepoint id, callable and if it's django 4.2+ also robust as bool
+        if isinstance(x[1], TransactionSender):
+            return x[1]
     txn_sender = TransactionSender()
     conn.on_commit(txn_sender)
     return txn_sender
