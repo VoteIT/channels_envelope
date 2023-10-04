@@ -1,3 +1,4 @@
+import asyncio
 import doctest
 from contextlib import suppress
 from copy import deepcopy
@@ -190,7 +191,8 @@ async def mk_communicator(client=None, drain=True):
     connected, subprotocol = await communicator.connect()
     assert connected
     if drain:
-        await communicator.receive_from(0.1)
+        while communicator.output_queue.qsize():
+            await communicator.output_queue.get()
     return communicator
 
 
