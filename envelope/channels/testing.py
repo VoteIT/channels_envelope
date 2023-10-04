@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+
 from envelope import WS_INCOMING
 from envelope.channels.messages import ChannelCommand
 from envelope.channels.messages import Subscribed
@@ -11,11 +14,11 @@ from envelope.decorators import add_message
 if TYPE_CHECKING:
     from envelope.consumer.websocket import WebsocketConsumer
 
-# FIXME: Debug isn't registered properly? :/
-# if not settings.DEBUG:
-#    raise ImproperlyConfigured(
-#        "%s should never be imported unless DEBUG mode is on." % __name__
-#    )
+
+if not settings.DEBUG:
+    raise ImproperlyConfigured(
+        "%s should never be imported unless DEBUG mode is on." % __name__
+    )
 
 
 @add_message(WS_INCOMING)
