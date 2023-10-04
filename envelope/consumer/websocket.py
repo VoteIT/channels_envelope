@@ -152,11 +152,6 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             )
 
     async def send_ws_error(self, error: ErrorMessage):
-        # from envelope.core.message import ErrorMessage
-
-        # if not isinstance(error, ErrorMessage):
-        #    raise TypeError("error is not an ErrorMessage instance")
-
         self.last_error = now()
         errors = get_envelope(ERRORS)
         if errors.message_signal:
@@ -226,7 +221,6 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=text_data)
 
     # async def send_internal(self, message: Message):
-    #     message.mm.registry = INTERNAL
     #     internal = get_envelope_from_message(message)
     #     self.event_logger.debug("Sending internal", consumer=self, message=message)
     #     if internal.message_signal:

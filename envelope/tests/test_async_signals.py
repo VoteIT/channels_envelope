@@ -1,10 +1,13 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from envelope.async_signals import incoming_websocket_message
 from envelope.channels.messages import Subscriptions
 from envelope.tests.helpers import mk_consumer
+
+User = get_user_model()
 
 
 class RunAsyncRunnableTest(TestCase):

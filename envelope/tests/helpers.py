@@ -1,4 +1,5 @@
 import doctest
+from contextlib import suppress
 from copy import deepcopy
 from pkgutil import walk_packages
 from unittest.mock import patch
@@ -23,6 +24,8 @@ from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
 from envelope.decorators import add_message
 from envelope.logging import getEventLogger
+from envelope.messages.testing import ClientInfo
+from envelope.messages.testing import SendClientInfo
 from envelope.schemas import OutgoingEnvelopeSchema
 from envelope.utils import add_envelopes
 
@@ -168,7 +171,7 @@ def mk_consumer(consumer_name="abc", user=None, **kwargs):
     return consumer
 
 
-async def mk_communicator(client=None):
+async def mk_communicator(client=None, drain=True):
     from envelope.consumer.websocket import WebsocketConsumer
 
     headers = []
@@ -186,4 +189,20 @@ async def mk_communicator(client=None):
     )
     connected, subprotocol = await communicator.connect()
     assert connected
+    if drain:
+        await communicator.receive_from(0.1)
     return communicator
+
+
+async def get_consumer_name(communicator):
+    from envelope.envelopes import incoming, outgoing
+
+    msg = SendClientInfo()
+    payload = incoming.pack(msg)
+    text_data = payload.json()
+    await communicator.send_to(text_data=text_data)
+    response = await communicator.receive_from()
+    payload = outgoing.parse(response)
+    message = outgoing.unpack(payload)
+    assert isinstance(message, ClientInfo)
+    return message.data.consumer_name

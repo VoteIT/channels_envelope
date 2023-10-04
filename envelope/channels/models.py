@@ -30,15 +30,8 @@ class PubSubChannel(ABC):
     """
 
     consumer_channel: str | None
-    # Expect transported messages in dict or string format?
-    # dict_transport: bool = False
-    # Override to set another kind of transport
-    # Note that the consumer needs a method corresponding to the transport type.
-    # See channels docs
-    # transport: str = WS_SEND_TRANSPORT
     # Override to support different channel layers
     envelope_name = WS_OUTGOING
-    layer_name = DEFAULT_CHANNEL_LAYER  # Default
 
     @property
     @abstractmethod
@@ -58,7 +51,6 @@ class PubSubChannel(ABC):
         self,
         consumer_channel: str | None = None,
     ):
-
         self.consumer_channel = consumer_channel
 
     # def __init_subclass__(cls, **kwargs):
@@ -69,18 +61,16 @@ class PubSubChannel(ABC):
     # def registries(cls) -> Set:
     #     return cls.__registries
 
-    @cached_property
-    def channel_layer(self):
-        return get_channel_layer(alias=self.layer_name)
-
     async def subscribe(self):
         if not self.consumer_channel:
             raise ValueError("No consumer_channel specified")
-        await self.channel_layer.group_add(self.channel_name, self.consumer_channel)
+        layer = get_channel_layer()
+        await layer.group_add(self.channel_name, self.consumer_channel)
 
     async def leave(self):
         assert self.consumer_channel
-        await self.channel_layer.group_discard(self.channel_name, self.consumer_channel)
+        layer = get_channel_layer()
+        await layer.group_discard(self.channel_name, self.consumer_channel)
 
     async def publish(self, message: Message):
         sender = self.create_sender(message)
@@ -98,10 +88,10 @@ class PubSubChannel(ABC):
             sender()
 
     def create_sender(self, message: Message) -> SenderUtil:
-        message.mm.registry = self.envelope_name
         return SenderUtil(
             message,
             channel_name=self.channel_name,
+            envelope=self.envelope_name,
             group=True,
         )
 

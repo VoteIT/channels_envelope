@@ -35,6 +35,10 @@ SUBSCRIPTIONS = "channel.subscriptions"
 
 
 class ChannelCommand:
+    """
+    Note that channel commands are only for ContextChannels!
+    """
+
     schema = ChannelSchema
     data: ChannelSchema
 

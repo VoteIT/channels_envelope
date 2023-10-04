@@ -6,4 +6,4 @@ class UserChannelConfig(AppConfig):
 
     def ready(self):
         from . import channel
-        from . import signals
+        from . import async_signals

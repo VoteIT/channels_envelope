@@ -20,6 +20,7 @@ from envelope.messages.ping import Ping
 from envelope.messages.ping import Pong
 from envelope.messages.testing import SendClientInfo
 from envelope.tests.helpers import TempSignal
+from envelope.tests.helpers import get_consumer_name
 from envelope.tests.helpers import mk_communicator
 from envelope.tests.helpers import mk_consumer
 from envelope.tests.helpers import testing_channel_layers_setting
@@ -46,16 +47,6 @@ class WebsocketConsumerTests(TransactionTestCase):
         kwargs.setdefault("user", self.user)
         return mk_consumer(**kwargs)
 
-    async def get_consumer_name(self, communicator):
-        msg = SendClientInfo()
-        payload = incoming.pack(msg)
-        text_data = payload.json()
-        await communicator.send_to(text_data=text_data)
-        response = await communicator.receive_from()
-        payload = outgoing.parse(response)
-        message = outgoing.unpack(payload)
-        return message.data.consumer_name
-
     async def test_connect(self):
         self.signal_was_fired = False
 
@@ -65,7 +56,6 @@ class WebsocketConsumerTests(TransactionTestCase):
             self.signal_was_fired = True
 
         with TempSignal(consumer_connected, signal_check):
-            # await communicator.send_to(text_data=text_data)
             communicator = await mk_communicator(self.client)
 
         self.assertTrue(self.signal_was_fired)
@@ -175,7 +165,7 @@ class WebsocketConsumerTests(TransactionTestCase):
     async def test_internal_msg(self):
         self.signal_was_fired = False
         communicator = await mk_communicator(self.client)
-        consumer_name = await self.get_consumer_name(communicator)
+        consumer_name = await get_consumer_name(communicator)
         msg = SendClientInfo(mm={"consumer_name": consumer_name})
         sender = get_sender_util()(msg, channel_name=consumer_name, envelope=INTERNAL)
 
@@ -197,11 +187,7 @@ class WebsocketConsumerTests(TransactionTestCase):
 
     async def test_subscriptions_lifecycle(self):
         self.signal_was_fired = False
-        communicator = await mk_communicator(self.client)
-        # Subscribe
-        msg = ForceSubscribe(pk=self.user.pk, channel_type=UserChannel.name)
-        payload = incoming.pack(msg)
-        await communicator.send_to(text_data=payload.json())
+        communicator = await mk_communicator(self.client, drain=False)
         response = await communicator.receive_from()
         payload = outgoing.parse(response)
         self.assertEqual(
@@ -213,7 +199,6 @@ class WebsocketConsumerTests(TransactionTestCase):
                     "channel_name": f"user_{self.user.pk}",
                     "app_state": None,
                 },
-                "s": "s",
             },
             payload.dict(exclude_none=True),
         )

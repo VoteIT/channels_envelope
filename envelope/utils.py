@@ -159,7 +159,6 @@ class SenderUtil:
         *,
         channel_name: str,
         group: bool = False,
-        # layer_name: str | None = None,
     ):
         self.message = message
         if isinstance(envelope, str):
