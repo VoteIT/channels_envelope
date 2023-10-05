@@ -2,7 +2,6 @@ from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from typing import TYPE_CHECKING
-from typing import TypeVar
 
 from async_signals import Signal
 from pydantic import BaseModel
@@ -19,10 +18,6 @@ if TYPE_CHECKING:
     from envelope.core.message import Message
     from envelope.registries import MessageRegistry
     from envelope.schemas import MessageMeta
-
-
-S = TypeVar("S")  # schema
-M = TypeVar("M")  # model
 
 
 class Transport(ABC):
