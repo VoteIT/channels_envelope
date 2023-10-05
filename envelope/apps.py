@@ -25,6 +25,7 @@ class ChannelsEnvelopeConfig(AppConfig):
     def ready(self):
         from envelope.envelopes import register_envelopes
         from envelope.messages import register_messages
+        from envelope.core import async_signals
 
         register_envelopes()
         register_messages()
@@ -117,7 +118,7 @@ class ChannelsEnvelopeConfig(AppConfig):
 
         for registry in get_global_message_registry().values():
             for msg_klass in registry.values():
-                for (signal, func, superclass, kwargs) in self.deferred_message_signals:
+                for signal, func, superclass, kwargs in self.deferred_message_signals:
                     if issubclass(msg_klass, superclass):
                         signal.connect(func, sender=msg_klass, **dict(kwargs))
         self.deferred_message_signals.clear()

@@ -9,16 +9,12 @@ from django.utils.functional import cached_property
 from pydantic import BaseModel
 
 from envelope import MessageStates
-from envelope.async_signals import incoming_internal_message
-from envelope.async_signals import incoming_websocket_message
-from envelope.async_signals import outgoing_websocket_error
-from envelope.async_signals import outgoing_websocket_message
-from envelope.decorators import receiver_all_message_subclasses
 from envelope.schemas import MessageMeta
 from envelope.schemas import NoPayload
 
 if TYPE_CHECKING:
     from envelope.consumer.websocket import WebsocketConsumer
+
 
 User: AbstractUser = get_user_model()
 
@@ -96,18 +92,3 @@ class AsyncRunnable(Message, ABC):
     @abstractmethod
     async def run(self, *, consumer: WebsocketConsumer, **kwargs):
         pass
-
-
-@receiver_all_message_subclasses(
-    {
-        incoming_internal_message,
-        outgoing_websocket_error,
-        incoming_websocket_message,
-        outgoing_websocket_message,
-    },
-    sender=AsyncRunnable,
-)
-async def run_async_runnable(
-    *, consumer: WebsocketConsumer, message: AsyncRunnable, **kwargs
-):
-    await message.run(consumer=consumer, **kwargs)

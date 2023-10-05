@@ -6,9 +6,9 @@ from envelope import WS_OUTGOING
 from envelope import WS_SEND_ERROR_TRANSPORT
 from envelope import WS_SEND_TRANSPORT
 from envelope import async_signals
-from envelope.core.envelope import DictTransport
 from envelope.core.envelope import Envelope
-from envelope.core.envelope import TextTransport
+from envelope.core.transport import DictTransport
+from envelope.core.transport import TextTransport
 from envelope.schemas import EnvelopeSchema
 from envelope.schemas import ErrorEnvelopeSchema
 from envelope.schemas import IncomingEnvelopeSchema

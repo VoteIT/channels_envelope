@@ -20,7 +20,7 @@ from rq import Queue
 from rq import SimpleWorker
 
 from envelope import WS_SEND_TRANSPORT
-from envelope.core.envelope import DictTransport
+from envelope.core.transport import DictTransport
 from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
 from envelope.decorators import add_message
