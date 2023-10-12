@@ -119,7 +119,7 @@ class SubscribedTests(TestCase):
         msg = self._mk_msg(ch, user=self.user_one)
         consumer = mk_consumer()
         await msg.run(consumer=consumer)
-        subs = ChannelSchema(pk=1, channel_type="user")
+        subs = ChannelSchema(pk=self.user_one.pk, channel_type="user")
         self.assertEqual({subs}, consumer.subscriptions)
 
 
