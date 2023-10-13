@@ -31,20 +31,16 @@ Some core principles:
   channel to be valid.
 - **Message validation in different steps**
   First the basic message structure, then the payload itself
-  and then maybe actual objects.
+  and any expensive validations (like db queries) outside the async consumer.
 - **No surprises**
   If a payload doesn't conform to an actual message
   that's supposed to be communicated through that channel, 
   it will be dropped.
 
-## Prerequesites
+## Prerequisites
 
-Read up on Django Channels and what it does - especially consumers.
-In this example we'll be using a mock consumer. We'll focus
-on what happens after the Channels consumer has received a message.
-
-We'll also prep replies to be sent to a websocket connection or another
-channels consumer.
+* Basic Django knowledge.
+* Read up on Django Channels and what it does - especially consumers.
 
 ## Core concepts
 
@@ -63,7 +59,7 @@ Envelopes have short keys where only 't' is required.
 * `i`  Message trace id. Any error or response caused by 
   this message will be returned with the same trace id. It's a good idea 
   to pass this along to whatever action this message will cause. (A process queue for instance)
-* `p`  Payload. Can be blank, normally a dict but it's up to the envelopes
+* `p`  Payload. Can be blank, normally a dict, but it's up to the envelopes
   schema to define this.
 * `s`  State - an outbound message that's caused by another message 
   usually has state to indicate the result of the action. By using state
@@ -99,14 +95,99 @@ different registries.
 
 Use names that explain the direction, for instance 'websocket_incoming'.
 
-### Connection events
+### Connection signals
 
-The async signals `consumer_connected` and `consumer_disconnected` fires as soon as a connection
+The async signals `consumer_connected` and `consumer_closed` fires as soon as a connection
 is accepted or closed. They in turn will que a job with the sync signals 
 `connection_created` and `connection_closed`. That way the sync code won't block the connection.
 
-### Message events
+```doctest
+
+>>> from envelope.async_signals import consumer_connected, consumer_closed
+>>> from envelope.signals import connection_created, connection_closed
+
+```
+
+### Message signals
 
 Any recipient of a message will generate an event that other parts of the application can react to.
 That way functionality can be added to messages. For instance any message that inherits
-`envelope.core.message.AsyncRunnable` will call the method `run`. 
+`envelope.core.message.AsyncRunnable` will call the method `run`.
+
+Each message direction has its own async signal.
+
+
+```doctest
+
+>>> from envelope.async_signals import incoming_websocket_message
+>>> from envelope.async_signals import outgoing_websocket_message
+>>> from envelope.async_signals import outgoing_websocket_error
+
+```
+
+
+## Usage examples
+
+### Sending messages when content is changed
+
+In this example, we'll signal the users own channel when the user object is changed.
+A user that has several tabs connected to the same server will see the change in all tabs instantly.
+
+Make sure envelope.app.user_channel is in INSTALLED_APPS for this example to work.
+
+```doctest
+
+>>> from pydantic import BaseModel
+>>> from django.contrib.auth import get_user_model
+>>> from django.dispatch import receiver
+>>> from django.db.models.signals import post_save
+>>> from envelope.core.message import Message
+>>> from envelope.app.user_channel.channel import UserChannel
+>>> from envelope import WS_OUTGOING
+>>> from envelope.decorators import add_message
+    
+>>> User = get_user_model()
+    
+>>> class UserSchema(BaseModel):
+...     username: str
+...     first_name: str = ""
+...     last_name: str = ""
+...     email: str = ""
+    
+    
+>>> @add_message(WS_OUTGOING)
+... class UserDetails(Message):
+...     name = "user.details"
+...     schema = UserSchema
+    
+    
+>>> @receiver(post_save, sender=User)
+... def send_user_details_on_change(instance: User, **kwargs):
+...     data = {k: getattr(instance, k) for k in UserSchema.schema()['properties']}
+...     msg = UserDetails(**data)
+...     channel = UserChannel.from_instance(instance)
+...     channel.sync_publish(msg)
+    
+# We'll mock the channels layer to catch the message
+# By default, sync messages will only be sent when the transaction commits
+# to avoid sending messages for things that may not happen.
+    
+>>> from unittest.mock import patch
+>>> from channels.layers import get_channel_layer
+>>> layer = get_channel_layer()
+
+# Test here is Djangos instance of TestCase
+>>> with patch.object(layer, 'group_send') as mock_send:
+...     with test.captureOnCommitCallbacks(execute=True):
+...         new_user = User.objects.create(username="jane", first_name="Jane", last_name="Doe")
+...         mock_send.called  # No message yet since db hasn't committed!
+False
+
+...     mock_send.called
+True
+
+...     x for x in mock_send.mock_calls
+[call('user_86', {'text_data': '{"t": "user.details", "p": {"username": "jane", "first_name": "Jane", "last_name": "Doe", "email": ""}, "i": null, "s": null}', 'type': 'websocket.send', 'i': None, 't': 'user.details', 's': None})]
+
+
+```

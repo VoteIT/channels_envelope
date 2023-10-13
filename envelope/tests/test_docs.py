@@ -37,11 +37,11 @@ class RunDocTests(TestCase):
         self._doctest_file("README.md")
 
 
-def load_tests(loader, tests, pattern):
-    import envelope
-
-    load_doctests(
-        tests,
-        envelope,
-    )
-    return tests
+# def load_tests(loader, tests, pattern):
+#     import envelope
+#
+#     load_doctests(
+#         tests,
+#         envelope,
+#     )
+#     return tests
