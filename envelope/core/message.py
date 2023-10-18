@@ -16,9 +16,6 @@ if TYPE_CHECKING:
     from envelope.consumer.websocket import WebsocketConsumer
 
 
-User: AbstractUser = get_user_model()
-
-
 class Message(MessageStates, ABC):
     mm: MessageMeta
     schema: type[BaseModel] = NoPayload
@@ -66,6 +63,7 @@ class Message(MessageStates, ABC):
         Retrieve user from MessageMeta.user_pk, if it exists
         """
         if self.mm.user_pk:
+            User: AbstractUser = get_user_model()
             return User.objects.filter(pk=self.mm.user_pk).first()
 
     def __str__(self):
