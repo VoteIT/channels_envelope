@@ -171,7 +171,8 @@ Make sure envelope.app.user_channel is in INSTALLED_APPS for this example to wor
 # We'll mock the channels layer to catch the message
 # By default, sync messages will only be sent when the transaction commits
 # to avoid sending messages for things that may not happen.
-    
+
+>>> from json import loads
 >>> from unittest.mock import patch
 >>> from channels.layers import get_channel_layer
 >>> layer = get_channel_layer()
@@ -180,14 +181,21 @@ Make sure envelope.app.user_channel is in INSTALLED_APPS for this example to wor
 >>> with patch.object(layer, 'group_send') as mock_send:
 ...     with test.captureOnCommitCallbacks(execute=True):
 ...         new_user = User.objects.create(username="jane", first_name="Jane", last_name="Doe")
-...         mock_send.called  # No message yet since db hasn't committed!
+...         first = mock_send.called  # No message yet since db hasn't committed!
+...     second = mock_send.called
+
+
+>>> first
 False
 
-...     mock_send.called
+>>> second
 True
 
-...     x for x in mock_send.mock_calls
-[call('user_86', {'text_data': '{"t": "user.details", "p": {"username": "jane", "first_name": "Jane", "last_name": "Doe", "email": ""}, "i": null, "s": null}', 'type': 'websocket.send', 'i': None, 't': 'user.details', 's': None})]
+>>> mock_send.mock_calls[0].args[0] == f"user_{new_user.pk}"
+True
 
+>>> data = loads(mock_send.mock_calls[0].args[1]['text_data'])
+>>> data['p']
+{'username': 'jane', 'first_name': 'Jane', 'last_name': 'Doe', 'email': ''}
 
 ```
