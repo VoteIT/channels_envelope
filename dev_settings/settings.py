@@ -98,14 +98,6 @@ DATABASES = {
             "NAME": BASE_DIR / "db_test.sqlite3",
         },
     }
-    # "default": {
-    #     "ENGINE": "django.db.backends.postgresql",
-    #     "NAME": "postgres",
-    #     "USER": "postgres",
-    #     # "PASSWORD": os.getenv("POSTGRES_PASSWORD", "indeedee"),
-    #     "HOST": "localhost",
-    #     "PORT": 15432,
-    # }
 }
 
 RQ_QUEUES = {
@@ -114,11 +106,6 @@ RQ_QUEUES = {
         "PORT": 16379,
         "DB": 9,
     },
-    # "testing": {
-    #     "HOST": "localhost",
-    #     "PORT": 6379,
-    #     "DB": 5,
-    # },
 }
 
 

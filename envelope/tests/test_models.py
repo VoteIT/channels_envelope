@@ -17,7 +17,7 @@ class TransactionSenderIntegrationTests(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 for i in range(1, 4):
                     websocket_send(ProgressNum(curr=i, total=3), channel_name="abc")
-            self.failUnless(mock_send.called)
+            self.assertTrue(mock_send.called)
             data = mock_send.call_args[0][1]
             self.assertEqual("s.batch2", data["t"])
             self.assertEqual("websocket.send", data["type"])
@@ -37,7 +37,7 @@ class TransactionSenderIntegrationTests(TestCase):
                     websocket_send(
                         ProgressNum(curr=i, total=3), channel_name="abc", state="s"
                     )
-            self.failUnless(mock_send.called)
+            self.assertTrue(mock_send.called)
             data = mock_send.call_args[0][1]
             self.assertEqual("s.batch", data["t"])
             self.assertEqual("s", data["s"])
