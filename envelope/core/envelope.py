@@ -156,7 +156,7 @@ class Envelope:
         True
         >>> msg_class = env.registry['testing.hello']
         >>> hello_msg = msg_class( \
-                mm={'registry': 'boo', 'consumer_name': 'abc', 'user_pk': 1, 'state': 'q', 'id': 5})
+                mm={'consumer_name': 'abc', 'user_pk': 1, 'state': 'q', 'id': 5})
         >>> env.pack(hello_msg)
         OutgoingEnvelopeSchema(t='testing.hello', p=None, i='5', s='q')
         """
