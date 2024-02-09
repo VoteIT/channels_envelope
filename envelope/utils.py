@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import UserList
 from datetime import datetime
 from itertools import groupby
 from typing import TYPE_CHECKING
@@ -20,14 +19,11 @@ from envelope import WS_OUTGOING
 from envelope.models import Connection
 
 if TYPE_CHECKING:
-    from django.db.models import Model
-    from django.db.models import QuerySet
     from envelope.core.message import ErrorMessage
     from envelope.core.message import Message
     from envelope.core.envelope import Envelope
     from envelope.registries import MessageRegistry
     from envelope.messages.common import BatchMessage
-    from rest_framework.serializers import Serializer
 
 
 def get_global_message_registry() -> MessageRegistry:
@@ -44,12 +40,6 @@ def get_context_channel_registry():
     from envelope.registries import context_channel_registry
 
     return context_channel_registry
-
-
-# def get_pubsub_channel_registry():
-#     from envelope.registries import pubsub_channel_registry
-#
-#     return pubsub_channel_registry
 
 
 def get_error_type(name) -> type[ErrorMessage]:
@@ -150,7 +140,6 @@ class SenderUtil:
     Made callable, so it can be added to the on_commit hook in django.
     """
 
-    # FIXME: Allow channel layer specification?
     def __init__(
         self,
         message: Message,
@@ -249,7 +238,6 @@ def websocket_send(
     if on_commit:
         txn_sender = get_or_create_txn_sender()
         if txn_sender is None:
-            # logger.info("on_commit called outside of transaction, sending immediately")
             sender()
         else:
             txn_sender.add(sender)
@@ -261,9 +249,9 @@ def internal_send(
     message: Message,
     *,
     channel_name: str = None,
-    state: str | None = None,
     on_commit: bool = True,
     group: bool = False,
+    state: str | None = None,
 ):
     """
     From sync world outside the consumer - send an internal message to a group or a specific consumer.
@@ -302,9 +290,8 @@ def internal_send(
                 "Must specify either channel_name as argument to this function or on message"
             )
         channel_name = message.mm.consumer_name
-    # Should not have any effect
-    # if state is not None:
-    #    message.mm.state = state
+    if state is not None:
+        message.mm.state = state
     sender = get_sender_util()(
         message,
         envelope=INTERNAL,

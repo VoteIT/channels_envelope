@@ -65,12 +65,6 @@ class OutgoingEnvelopeSchema(EnvelopeSchema):
 
     s: str | None = Field(max_length=6, alias="state")
 
-    # @validator("s")
-    # def validate_state(cls, v):
-    #     if v and v not in MessageStates.MESSAGE_STATES:
-    #         raise ValueError("%s is not a valid message state" % v)
-    #     return v
-
 
 class ErrorEnvelopeSchema(OutgoingEnvelopeSchema):
     s: str = Field(MessageStates.FAILED, const=True)

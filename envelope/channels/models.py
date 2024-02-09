@@ -51,14 +51,6 @@ class PubSubChannel(ABC):
     ):
         self.consumer_channel = consumer_channel
 
-    # def __init_subclass__(cls, **kwargs):
-    #     cls.__registries = set()
-    #     super().__init_subclass__(**kwargs)
-
-    # @classmethod
-    # def registries(cls) -> Set:
-    #     return cls.__registries
-
     async def subscribe(self):
         if not self.consumer_channel:  # pragma: no coverage
             raise ValueError("No consumer_channel specified")
