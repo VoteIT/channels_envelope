@@ -74,8 +74,11 @@ def get_batch_message() -> type[BatchMessage]:
 
 def get_sender_util() -> type[SenderUtil]:
     """
+    Returns whatever we've set as ENVELOPE_SENDER_UTIL
     >>> from django.test import override_settings
-    >>> with override_settings(ENVELOPE_SENDER_UTIL='collections.Counter')
+    >>> with override_settings(ENVELOPE_SENDER_UTIL='collections.Counter'):
+    ...     get_sender_util()
+    <class 'collections.Counter'>
     """
 
     try:
@@ -183,7 +186,7 @@ class SenderUtil:
 
     async def async_send(self):
         payload = self.envelope.transport(self.envelope, self.message)
-        channel_layer = get_channel_layer()
+        channel_layer = get_channel_layer(self.envelope.layer_name)
         if self.group:
             await channel_layer.group_send(self.channel_name, payload)
         else:
@@ -342,50 +345,6 @@ def websocket_send_error(
         group=group,
     )
     sender()
-
-
-class AppState(UserList):
-    """
-    Attach several messages to a subscribed response. It's built for websocket application states.
-    """
-
-    def append(self, item: Message) -> None:
-        """
-        Append an outgoing message to another message. Used by pubsub and similar.
-        """
-        super().append(
-            dict(
-                t=item.name,
-                p=item.data,
-            )
-        )
-
-    # FIXME: Remove
-    def append_from(
-        self,
-        instance: Model,
-        serializer_class: type[Serializer],
-        message_class: type[Message],
-    ):  # pragma: no cover
-        """
-        Insert outgoing message from instance, using DRF serializer and message_class
-        """
-        data = serializer_class(instance).data
-        self.append(message_class(data=data))
-
-    # FIXME: Remove
-    def append_from_queryset(
-        self,
-        queryset: QuerySet,
-        serializer_class: type[Serializer],
-        message_class: type[Message],
-    ):  # pragma: no cover
-        """
-        Insert outgoing messages from queryset, using DRF serializer and message class
-        """
-        serializer = serializer_class(queryset, many=True)
-        for item in serializer.data:
-            self.append(message_class(data=item))
 
 
 def get_or_create_txn_sender(

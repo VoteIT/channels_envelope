@@ -19,9 +19,6 @@ from envelope.utils import get_or_create_txn_sender
 if TYPE_CHECKING:
     from envelope.core.message import Message
     from django.db.models import Model
-    from django.db.models import QuerySet
-
-    # from rest_framework.serializers import ModelSerializer
 
 
 class PubSubChannel(ABC):
@@ -32,6 +29,7 @@ class PubSubChannel(ABC):
     consumer_channel: str | None
     # Override to support different channel layers
     envelope_name = WS_OUTGOING
+    layer_name = DEFAULT_CHANNEL_LAYER
 
     @property
     @abstractmethod
@@ -62,14 +60,14 @@ class PubSubChannel(ABC):
     #     return cls.__registries
 
     async def subscribe(self):
-        if not self.consumer_channel:
+        if not self.consumer_channel:  # pragma: no coverage
             raise ValueError("No consumer_channel specified")
-        layer = get_channel_layer()
+        layer = get_channel_layer(self.layer_name)
         await layer.group_add(self.channel_name, self.consumer_channel)
 
     async def leave(self):
         assert self.consumer_channel
-        layer = get_channel_layer()
+        layer = get_channel_layer(self.layer_name)
         await layer.group_discard(self.channel_name, self.consumer_channel)
 
     async def publish(self, message: Message):
@@ -173,8 +171,6 @@ class AppState(UserList):
     Attach several messages to a subscribed response. It's built for websocket application states.
     """
 
-    # FIXME: Limit to specific registry in init?
-
     def append(self, item: Message) -> None:
         """
         Append an outgoing message to another message. Used by pubsub and similar.
@@ -185,27 +181,3 @@ class AppState(UserList):
                 p=item.data,
             )
         )
-
-    def append_from(
-        self,
-        instance: Model,
-        serializer_class,
-        message_class: type[Message],
-    ):
-        """
-        Insert outgoing message from instance, using DRF serializer and message_class
-        """
-        data = serializer_class(instance).data
-        self.append(message_class(data=data))
-
-    def append_from_queryset(
-        self,
-        queryset: QuerySet,
-        serializer_class,
-        message_class: type[Message],
-    ):
-        """
-        Insert outgoing messages from queryset, using DRF serializer and message class
-        """
-        for instance in queryset:
-            self.append_from(instance, serializer_class, message_class)

@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from async_signals import Signal
+from channels import DEFAULT_CHANNEL_LAYER
 from pydantic import BaseModel
 
 from envelope import Error
@@ -30,6 +31,7 @@ class Envelope:
     transport: Transport | None
     message_signal: Signal | None
     logger: EventLoggerAdapter
+    layer_name: str
 
     def __init__(
         self,
@@ -40,6 +42,7 @@ class Envelope:
         transport: Transport | None = None,
         allow_batch: bool = False,
         message_signal: Signal | None = None,
+        layer_name: str = DEFAULT_CHANNEL_LAYER,
     ):
         if not issubclass(schema, BaseModel):  # pragma: no coverage
             raise TypeError("Must be a subclass of pydantic.BaseModel")
@@ -51,6 +54,7 @@ class Envelope:
         if logger_name == _default:
             logger_name = "envelope." + name + ".event"
         self.logger = getEventLogger(logger_name)
+        self.layer_name = layer_name
 
     @property
     def registry(self):

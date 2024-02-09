@@ -30,13 +30,15 @@ class ChannelsEnvelopeConfig(AppConfig):
         register_envelopes()
         register_messages()
         self.check_settings_and_import()
-        self.check_consumer_settings()
         self.check_registries_names()
+        self.check_rq_config()
         self.register_deferred_signals()
 
     @staticmethod
     def check_settings_and_import():
         from envelope.messages.common import BatchMessage
+        from envelope.utils import get_sender_util
+        from envelope.utils import SenderUtil
 
         # Batch message factory to use
         batch_message_name = getattr(settings, "ENVELOPE_BATCH_MESSAGE", None)
@@ -48,38 +50,11 @@ class ChannelsEnvelopeConfig(AppConfig):
                 )
 
         # Sender util to use
-        sender_util_name = getattr(settings, "ENVELOPE_SENDER_UTIL", None)
-        if isinstance(sender_util_name, str):
-            # Validation...?
-            import_string(sender_util_name)
-
-    @staticmethod
-    def check_consumer_settings():
-        ...
-        # Consumer
-        # if not isinstance(getattr(settings, "ENVELOPE_CONSUMER", None), dict):
-        #     raise ImproperlyConfigured(
-        #         "ENVELOPE_CONSUMER must exist in settings and be a dict"
-        #     )
-        # consumer_settings = settings.ENVELOPE_CONSUMER
-        #
-        # for (k, v) in [
-        #     ("connect_signal_job", "envelope.jobs.signal_websocket_connect"),
-        #     ("close_signal_job", "envelope.jobs.signal_websocket_connect"),
-        # ]:
-        #     consumer_settings.setdefault(k, v)
-        #     if isinstance(consumer_settings[k], str):
-        #         consumer_settings[k] = import_string(consumer_settings[k])
-        # for (k, v) in [
-        #     ("connections_queue", "default"),
-        #     ("timestamp_queue", "default"),
-        # ]:
-        #     consumer_settings.setdefault(k, v)
-        #     queue = get_queue(consumer_settings[k])
-        #     if not isinstance(queue, Queue):
-        #         raise ImproperlyConfigured(
-        #             f"ENVELOPE_CONSUMER queue {consumer_settings[k]} is not a valid RQ Queue"
-        #         )
+        sender_util = get_sender_util()
+        if not issubclass(sender_util, SenderUtil):
+            raise ImproperlyConfigured(
+                f"{sender_util} is not a subclass of envelope.utils.SenderUtil - check ENVELOPE_SENDER_UTIL in settings."
+            )
 
     @staticmethod
     def check_registries_names():
@@ -104,6 +79,30 @@ class ChannelsEnvelopeConfig(AppConfig):
             raise ImproperlyConfigured(
                 f"Message registries {','.join(missing)} have no corresponding envelope registry. Messages won't work."
             )
+
+    @staticmethod
+    def check_rq_config():
+        """
+        >>> from django.test import override_settings
+        >>> with override_settings(RQ_QUEUES={}):
+        ...     ChannelsEnvelopeConfig.check_rq_config()
+        Traceback (most recent call last):
+        ...
+        django.core.exceptions.ImproperlyConfigured:
+        """
+        # FIXME: Allow use without rq?
+        from envelope.utils import get_global_message_registry
+        from envelope.deferred_jobs.message import DeferredJob
+
+        global_reg = get_global_message_registry()
+        rq_queues = getattr(settings, "RQ_QUEUES", {})
+        for reg_name, reg in global_reg.items():
+            for msg in reg.values():
+                if issubclass(msg, DeferredJob):
+                    if msg.queue not in rq_queues:
+                        raise ImproperlyConfigured(
+                            f"Message {msg} set to queue {msg.queue} which doesn't exist in settings.RQ_QUEUES"
+                        )
 
     def add_deferred_message_signal(
         self, signal: Signal, func: callable, superclass: type[Message], kwargs: dict
