@@ -1,7 +1,3 @@
-# API
-from envelope.utils import add_messages
-
-
 def register_messages():
     from . import errors
     from . import common, ping

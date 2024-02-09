@@ -46,10 +46,10 @@ def get_context_channel_registry():
     return context_channel_registry
 
 
-def get_pubsub_channel_registry():
-    from envelope.registries import pubsub_channel_registry
-
-    return pubsub_channel_registry
+# def get_pubsub_channel_registry():
+#     from envelope.registries import pubsub_channel_registry
+#
+#     return pubsub_channel_registry
 
 
 def get_error_type(name) -> type[ErrorMessage]:
@@ -73,6 +73,11 @@ def get_batch_message() -> type[BatchMessage]:
 
 
 def get_sender_util() -> type[SenderUtil]:
+    """
+    >>> from django.test import override_settings
+    >>> with override_settings(ENVELOPE_SENDER_UTIL='collections.Counter')
+    """
+
     try:
         sender_util_name = getattr(settings, "ENVELOPE_SENDER_UTIL")
         return import_string(sender_util_name)
@@ -83,7 +88,6 @@ def get_sender_util() -> type[SenderUtil]:
 def add_envelopes(*envelopes: Envelope):
     """
     Decorator to add handlers to several namespaces.
-
 
     >>> from envelope.registries import envelope_registry
     >>> from envelope.registries import message_registry
@@ -106,14 +110,6 @@ def add_envelopes(*envelopes: Envelope):
     for envelope in envelopes:
         envelope_registry[envelope.name] = envelope
         message_registry.setdefault(envelope.name, {})
-
-
-def add_messages(namespace: str, *messages: type[Message]):
-    from envelope.registries import message_registry
-
-    assert namespace in message_registry, "No message registry named %s" % namespace
-    for message in messages:
-        message_registry[namespace][message.name] = message
 
 
 def update_connection_status(
@@ -166,6 +162,10 @@ class SenderUtil:
         self.envelope = envelope
         self.channel_name = channel_name
         self.group = group
+        if self.envelope.transport is None:
+            raise ValueError(
+                f"Don't know how to send message {self.message} since envelope {self.envelope} lacks transport"
+            )
 
     def __call__(self):
         async_to_sync(self.async_send)()
@@ -182,10 +182,6 @@ class SenderUtil:
         return self.envelope.allow_batch and self.message.allow_batch
 
     async def async_send(self):
-        if self.envelope.transport is None:
-            raise ValueError(
-                f"Don't know how to send message {self.message} since envelope {self.message} lacks transport"
-            )
         payload = self.envelope.transport(self.envelope, self.message)
         channel_layer = get_channel_layer()
         if self.group:
@@ -231,11 +227,11 @@ def websocket_send(
     """
     if channel_name is None:
         if group:
-            raise Exception(
+            raise ValueError(
                 "Specify channel_name if you'd like to send the message to a group"
             )
         if message.mm.consumer_name is None:
-            raise Exception(
+            raise ValueError(
                 "Must specify either channel_name as argument to this function or on message"
             )
         channel_name = message.mm.consumer_name
@@ -295,16 +291,17 @@ def internal_send(
     """
     if channel_name is None:
         if group:
-            raise Exception(
+            raise ValueError(
                 "Specify channel_name if you'd like to send the message to a group"
             )
         if message.mm.consumer_name is None:
-            raise Exception(
+            raise ValueError(
                 "Must specify either channel_name as argument to this function or on message"
             )
         channel_name = message.mm.consumer_name
-    if state is not None:
-        message.mm.state = state
+    # Should not have any effect
+    # if state is not None:
+    #    message.mm.state = state
     sender = get_sender_util()(
         message,
         envelope=INTERNAL,
@@ -312,21 +309,32 @@ def internal_send(
         group=group,
     )
     if on_commit:
-        transaction.on_commit(sender)
-    else:
-        sender()
+        conn = get_connection()
+        if conn.in_atomic_block:
+            return transaction.on_commit(sender)
+    sender()
 
 
 def websocket_send_error(
     error: ErrorMessage,
     *,
-    channel_name: str,
+    channel_name: str | None = None,
     group: bool = False,
 ):
     """
     Send an error to a group or a specific consumer. Errors can't be a part of transactions since
     there's a high probability that the transaction won't commit. (Depending on the error of course)
     """
+    if channel_name is None:
+        if group:
+            raise ValueError(
+                "Specify channel_name if you'd like to send the message to a group"
+            )
+        if error.mm.consumer_name is None:
+            raise ValueError(
+                "Must specify either channel_name as argument to this function or on message"
+            )
+        channel_name = error.mm.consumer_name
     sender = get_sender_util()(
         error,
         envelope=ERRORS,
@@ -334,11 +342,6 @@ def websocket_send_error(
         group=group,
     )
     sender()
-
-
-def get_message_type(message_name: str, _registry: str) -> type[Message]:
-    reg = get_message_registry(_registry)
-    return reg[message_name]
 
 
 class AppState(UserList):
@@ -357,24 +360,26 @@ class AppState(UserList):
             )
         )
 
+    # FIXME: Remove
     def append_from(
         self,
         instance: Model,
         serializer_class: type[Serializer],
         message_class: type[Message],
-    ):
+    ):  # pragma: no cover
         """
         Insert outgoing message from instance, using DRF serializer and message_class
         """
         data = serializer_class(instance).data
         self.append(message_class(data=data))
 
+    # FIXME: Remove
     def append_from_queryset(
         self,
         queryset: QuerySet,
         serializer_class: type[Serializer],
         message_class: type[Message],
-    ):
+    ):  # pragma: no cover
         """
         Insert outgoing messages from queryset, using DRF serializer and message class
         """
@@ -465,6 +470,3 @@ class TransactionSender:
 
     def __iter__(self):
         return iter(self.data)
-
-    def __len__(self):
-        return len(self.data)

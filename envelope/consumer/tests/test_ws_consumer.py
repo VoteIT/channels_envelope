@@ -1,7 +1,10 @@
+from json import loads
+
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
 from django.test import override_settings
 
+from envelope import ERRORS
 from envelope import INTERNAL
 from envelope.app.user_channel.channel import UserChannel
 from envelope.async_signals import consumer_connected
@@ -24,7 +27,9 @@ from envelope.tests.helpers import get_consumer_name
 from envelope.tests.helpers import mk_communicator
 from envelope.tests.helpers import mk_consumer
 from envelope.tests.helpers import testing_channel_layers_setting
+from envelope.utils import SenderUtil
 from envelope.utils import get_sender_util
+from envelope.utils import websocket_send_error
 
 User = get_user_model()
 
@@ -247,3 +252,33 @@ class WebsocketConsumerTests(TransactionTestCase):
             },
             payload.dict(exclude_none=True),
         )
+
+    async def test_send_error(self):
+        # self.signal_was_fired = False
+        communicator = await mk_communicator(self.client)
+        consumer_name = await get_consumer_name(communicator)
+        # The error will be received as a dict
+
+        msg = MessageTypeError(
+            envelope="something", type_name="i dont exist", msg="Oh man"
+        )
+        util = SenderUtil(msg, ERRORS, channel_name=consumer_name)
+        await util.async_send()
+        # websocket_send_error(msg, channel_name=consumer_name)
+
+        response = await communicator.receive_from()
+        data = loads(response)
+        self.assertEqual(
+            {
+                "i": None,
+                "p": {
+                    "envelope": "something",
+                    "msg": "Oh man",
+                    "type_name": "i dont exist",
+                },
+                "s": "f",
+                "t": "error.msg_type",
+            },
+            data,
+        )
+        await communicator.disconnect()

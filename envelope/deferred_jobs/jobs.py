@@ -68,7 +68,7 @@ def create_connection_status_on_websocket_connect(
     This job handles the sync code for a user connecting to a consumer.
     """
     assert online_at
-    #    _set_lang(language)
+    _set_lang(language)
     logger.debug("%s connected consumer %s", user_pk, consumer_name)
     connection = update_connection_status(
         user_pk=user_pk,
@@ -92,7 +92,7 @@ def update_connection_status_on_websocket_close(
     offline_at: datetime = None,
 ):
     assert offline_at
-    # _set_lang(language)
+    _set_lang(language)
     connection = update_connection_status(
         user_pk, channel_name=consumer_name, online=False, offline_at=offline_at
     )
