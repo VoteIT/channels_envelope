@@ -26,7 +26,11 @@ class ChannelsEnvelopeConfig(AppConfig):
         from envelope.envelopes import register_envelopes
         from envelope.messages import register_messages
         from envelope.core import async_signals
+        from envelope import channels
+        from envelope import deferred_jobs
 
+        channels.include()
+        deferred_jobs.include()
         register_envelopes()
         register_messages()
         self.check_settings_and_import()
@@ -90,7 +94,6 @@ class ChannelsEnvelopeConfig(AppConfig):
         ...
         django.core.exceptions.ImproperlyConfigured:
         """
-        # FIXME: Allow use without rq?
         from envelope.utils import get_global_message_registry
         from envelope.deferred_jobs.message import DeferredJob
 

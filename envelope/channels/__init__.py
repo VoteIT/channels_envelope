@@ -1,5 +1,12 @@
 """
 Pubsub channels, either with or without context
 """
-# SUBSCRIPTIONS_PUBSUB = "subscriptions_pubsub"
-# SUBSCRIPTIONS_CONTEXT = "subscriptions_context"
+
+
+def include():
+    from . import errors
+    from . import messages
+    from django.conf import settings
+
+    if settings.DEBUG:
+        from . import testing

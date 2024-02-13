@@ -39,8 +39,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_rq",
-    "envelope.deferred_jobs",
-    "envelope.channels",
     "envelope.app.user_channel",
     "envelope.app.online_channel",
     "envelope",  # After all other envelope things

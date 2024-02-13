@@ -6,7 +6,6 @@ from async_signals import receiver
 from envelope.app.online_channel.channel import OnlineChannel
 from envelope.async_signals import consumer_connected
 from envelope.async_signals import consumer_closed
-from envelope.channels.messages import Subscribed
 
 if TYPE_CHECKING:
     from envelope.consumer.websocket import WebsocketConsumer
