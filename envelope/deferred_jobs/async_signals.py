@@ -12,7 +12,6 @@ from envelope.async_signals import incoming_internal_message
 from envelope.async_signals import incoming_websocket_message
 from envelope.async_signals import outgoing_websocket_error
 from envelope.async_signals import outgoing_websocket_message
-from envelope.decorators import receiver_all_message_subclasses
 from envelope.deferred_jobs.jobs import create_connection_status_on_websocket_connect
 from envelope.deferred_jobs.jobs import mark_connection_action
 from envelope.deferred_jobs.jobs import update_connection_status_on_websocket_close
@@ -85,20 +84,20 @@ def maybe_update_connection(*, consumer: WebsocketConsumer, **kwargs):
                 )
 
 
-@receiver_all_message_subclasses(
-    {
+@receiver(
+    (
         incoming_internal_message,
         outgoing_websocket_error,
         incoming_websocket_message,
         outgoing_websocket_message,
-    },
-    sender=DeferredJob,
+    ),
 )
 async def queue_deferred_job(
     *, consumer: WebsocketConsumer, message: DeferredJob, **kwargs
 ):
-    await message.pre_queue(consumer=consumer, **kwargs)
-    if message.should_run:
-        message.enqueue()
-        # FIXME: Probably shouldn't mark this here. Rethink design?
-        consumer.last_job = now()
+    if isinstance(message, DeferredJob):
+        await message.pre_queue(consumer=consumer, **kwargs)
+        if message.should_run:
+            message.enqueue()
+            # FIXME: Probably shouldn't mark this here. Rethink design?
+            consumer.last_job = now()

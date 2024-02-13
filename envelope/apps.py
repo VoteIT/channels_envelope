@@ -1,15 +1,11 @@
 from __future__ import annotations
 from logging import getLogger
-from typing import TYPE_CHECKING
 
-from async_signals import Signal
 from django.apps import AppConfig
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 
-if TYPE_CHECKING:
-    from envelope.core.message import Message
 
 logger = getLogger(__name__)
 
@@ -36,7 +32,6 @@ class ChannelsEnvelopeConfig(AppConfig):
         self.check_settings_and_import()
         self.check_registries_names()
         self.check_rq_config()
-        self.register_deferred_signals()
 
     @staticmethod
     def check_settings_and_import():
@@ -106,21 +101,3 @@ class ChannelsEnvelopeConfig(AppConfig):
                         raise ImproperlyConfigured(
                             f"Message {msg} set to queue {msg.queue} which doesn't exist in settings.RQ_QUEUES"
                         )
-
-    def add_deferred_message_signal(
-        self, signal: Signal, func: callable, superclass: type[Message], kwargs: dict
-    ):
-        self.deferred_message_signals.add(
-            # FIX tuple
-            (signal, func, superclass, tuple([(k, v) for k, v in kwargs]))
-        )
-
-    def register_deferred_signals(self):
-        from envelope.utils import get_global_message_registry
-
-        for registry in get_global_message_registry().values():
-            for msg_klass in registry.values():
-                for signal, func, superclass, kwargs in self.deferred_message_signals:
-                    if issubclass(msg_klass, superclass):
-                        signal.connect(func, sender=msg_klass, **dict(kwargs))
-        self.deferred_message_signals.clear()

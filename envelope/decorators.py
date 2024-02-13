@@ -1,9 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from async_signals import Signal
-from django.apps import apps
-
 if TYPE_CHECKING:
     from envelope.core.message import Message
 
@@ -37,25 +34,3 @@ def add_message(*namespaces):
         return cls
 
     return _inner
-
-
-def receiver_all_message_subclasses(
-    signals: Signal | list[Signal] | set[Signal], sender=None, **kwargs
-):
-    """
-    Similar to Django's receiver decorator, but fetches messages that subclassed sender.
-    """
-    from envelope.core.message import Message
-
-    assert isinstance(sender, type), "This decorator requires sender to be specified"
-    assert issubclass(sender, Message), "This only works for messages"
-    if not isinstance(signals, (list, tuple, set)):
-        signals = (signals,)
-
-    def _decorator(func):
-        app_config = apps.get_app_config("envelope")
-        for signal in signals:
-            app_config.add_deferred_message_signal(signal, func, sender, kwargs)
-        return func
-
-    return _decorator
