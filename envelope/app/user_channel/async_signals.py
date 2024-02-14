@@ -14,12 +14,13 @@ if TYPE_CHECKING:
 
 @receiver(consumer_connected)
 async def subscribe_client_to_users_channel(*, consumer: WebsocketConsumer, **kw):
-    ch = UserChannel(consumer.user_pk, consumer_channel=consumer.channel_name)
-    await ch.subscribe()
-    msg = Subscribed(
-        channel_name=ch.channel_name, pk=consumer.user_pk, channel_type=ch.name
-    )
-    await consumer.send_ws_message(msg)
+    if consumer.user_pk:
+        ch = UserChannel(consumer.user_pk, consumer_channel=consumer.channel_name)
+        await ch.subscribe()
+        msg = Subscribed(
+            channel_name=ch.channel_name, pk=consumer.user_pk, channel_type=ch.name
+        )
+        await consumer.send_ws_message(msg)
 
 
 @receiver(consumer_closed)
@@ -31,5 +32,6 @@ async def leave_users_channel_on_disconnect(
     """
     Cleanup will probably be after the user object has been removed from the consumer.
     """
-    ch = UserChannel(consumer.user_pk, consumer_channel=consumer.channel_name)
-    await ch.leave()
+    if consumer.user_pk:
+        ch = UserChannel(consumer.user_pk, consumer_channel=consumer.channel_name)
+        await ch.leave()
