@@ -1,6 +1,8 @@
 from json import loads
 
+from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.test import TransactionTestCase
 from django.test import override_settings
 
@@ -262,8 +264,6 @@ class WebsocketConsumerTests(TransactionTestCase):
         )
         util = SenderUtil(msg, ERRORS, channel_name=consumer_name)
         await util.async_send()
-        # websocket_send_error(msg, channel_name=consumer_name)
-
         response = await communicator.receive_from()
         data = loads(response)
         self.assertEqual(
@@ -280,3 +280,21 @@ class WebsocketConsumerTests(TransactionTestCase):
             data,
         )
         await communicator.disconnect()
+
+    async def test_unauthenticated(self):
+        await sync_to_async(self.client.logout)()
+        with self.assertRaises(AssertionError) as cm:
+            await mk_communicator(self.client)
+        self.assertEqual("Not connected", str(cm.exception))
+
+    @override_settings(ENVELOPE_ALLOW_UNAUTHENTICATED=True)
+    async def test_unauthenticated_allowed(self):
+        await sync_to_async(self.client.logout)()
+        communicator = await mk_communicator(self.client)
+        msg = Ping(mm={"id": "boo"})
+        data = incoming.pack(msg)
+        text_data = data.json()
+        await communicator.send_to(text_data=text_data)
+        response = await communicator.receive_from()
+        data = loads(response)
+        self.assertEqual({"t": "s.pong", "p": None, "i": "boo", "s": "s"}, data)

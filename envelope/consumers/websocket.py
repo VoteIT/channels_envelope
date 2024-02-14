@@ -59,8 +59,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
     connection_update_interval: timedelta | None = None
     subscriptions: set[ChannelSchema]
     language: str | None = None
-    # Allow anon? FIXME: Settable later on
-    allow_anon_connections = False
+    allow_unauthenticated: bool = False
     event_logger: EventLoggerAdapter
 
     def __init__(
@@ -76,6 +75,9 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             self.connection_update_interval = timedelta(seconds=180)
         # Set timestamps
         self.last_job = self.last_sent = self.last_received = now()
+        self.allow_unauthenticated = (
+            getattr(settings, "ENVELOPE_ALLOW_UNAUTHENTICATED", False) is True
+        )
 
     @cached_property
     def base_error(self) -> type[ErrorMessage]:
@@ -91,15 +93,23 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         self.language = get_language(self.scope)
         activate(self.language)  # FIXME: Safe here?
         self.user = await self.get_user()
-        if self.user.is_anonymous:
-            # FIXME: Allow anon connections?
-            self.event_logger.info("Connection denied", consumer=self)
-            raise DenyConnection()
         self.user_pk = self.user.pk
+        if self.user.is_anonymous:
+            if not self.allow_unauthenticated:
+                self.event_logger.info(
+                    "Connection denied - unauthenticated", consumer=self
+                )
+                raise DenyConnection()
+            if self.user_pk is not None:
+                raise Exception("user_pk wasn't None for anonymous user")
+            self.event_logger.debug(
+                "Unauthenticated connection accepted",
+                consumer=self,
+                extra=dict(lang=self.language),
+            )
+        else:
+            self.event_logger.info("Authenticated connection accepted", consumer=self)
         await self.accept()
-        self.event_logger.debug(
-            "Connection accepted", consumer=self, extra=dict(lang=self.language)
-        )
         await consumer_connected.send(sender=self.__class__, consumer=self)
 
     async def disconnect(self, close_code):

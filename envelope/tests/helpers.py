@@ -176,7 +176,7 @@ async def mk_communicator(client=None, drain=True):
         headers=headers,
     )
     connected, subprotocol = await communicator.connect()
-    assert connected
+    assert connected, "Not connected"
     if drain:
         while communicator.output_queue.qsize():
             await communicator.output_queue.get()
