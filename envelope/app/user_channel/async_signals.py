@@ -9,7 +9,7 @@ from envelope.app.user_channel.channel import UserChannel
 from envelope.channels.messages import Subscribed
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 
 @receiver(consumer_connected)

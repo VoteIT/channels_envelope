@@ -23,7 +23,7 @@ from envelope.utils import get_error_type
 from envelope.utils import websocket_send
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 SUBSCRIBE = "channel.subscribe"
 LEAVE = "channel.leave"

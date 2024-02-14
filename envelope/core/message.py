@@ -13,7 +13,7 @@ from envelope.schemas import MessageMeta
 from envelope.schemas import NoPayload
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 
 class Message(MessageStates, ABC):

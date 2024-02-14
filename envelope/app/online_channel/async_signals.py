@@ -8,7 +8,7 @@ from envelope.async_signals import consumer_connected
 from envelope.async_signals import consumer_closed
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 
 @receiver(consumer_connected)

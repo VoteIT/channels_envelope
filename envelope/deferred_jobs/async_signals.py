@@ -19,7 +19,7 @@ from envelope.deferred_jobs.message import DeferredJob
 from envelope.deferred_jobs.queues import get_queue_or_default
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 logger = getLogger(__name__)
 

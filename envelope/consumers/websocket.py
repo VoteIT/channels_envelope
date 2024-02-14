@@ -22,7 +22,7 @@ from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope.async_signals import consumer_connected
 from envelope.async_signals import consumer_closed
-from envelope.consumer.utils import get_language
+from envelope.consumers.utils import get_language
 from envelope.logging import getEventLogger
 from envelope.schemas import MessageMeta
 from envelope.utils import get_envelope

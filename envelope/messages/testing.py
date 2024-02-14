@@ -15,7 +15,7 @@ from envelope.decorators import add_message
 
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 if not settings.DEBUG:
     raise ImproperlyConfigured(

@@ -14,7 +14,6 @@ from envelope.async_signals import outgoing_websocket_error
 from envelope.async_signals import outgoing_websocket_message
 from envelope.channels.messages import Leave
 from envelope.channels.messages import ListSubscriptions
-from envelope.channels.testing import ForceSubscribe
 from envelope.envelopes import incoming
 from envelope.envelopes import outgoing
 from envelope.messages.errors import MessageTypeError
@@ -29,7 +28,6 @@ from envelope.tests.helpers import mk_consumer
 from envelope.tests.helpers import testing_channel_layers_setting
 from envelope.utils import SenderUtil
 from envelope.utils import get_sender_util
-from envelope.utils import websocket_send_error
 
 User = get_user_model()
 
@@ -44,7 +42,7 @@ class WebsocketConsumerTests(TransactionTestCase):
 
     @property
     def _cut(self):
-        from envelope.consumer.websocket import WebsocketConsumer
+        from envelope.consumers.websocket import WebsocketConsumer
 
         return WebsocketConsumer
 

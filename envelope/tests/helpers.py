@@ -1,22 +1,11 @@
-import asyncio
 import doctest
-from contextlib import suppress
-from copy import deepcopy
 from pkgutil import walk_packages
-from unittest.mock import patch
 
 from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter
-from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
-from django.db.transaction import get_connection
-
 from django.dispatch import Signal
 from async_signals import Signal as AsyncSignal
-
-from django.urls import re_path
 from django_rq import get_queue
-from rq import Queue
 from rq import SimpleWorker
 
 from envelope import WS_SEND_TRANSPORT
@@ -24,7 +13,6 @@ from envelope.core.transport import DictTransport
 from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
 from envelope.decorators import add_message
-from envelope.logging import getEventLogger
 from envelope.messages.testing import ClientInfo
 from envelope.messages.testing import SendClientInfo
 from envelope.schemas import OutgoingEnvelopeSchema
@@ -49,8 +37,7 @@ add_envelopes(testing_envelope)
 class WebsocketHello(AsyncRunnable):
     name = "testing.hello"
 
-    async def run(self, **kwargs):
-        ...
+    async def run(self, **kwargs): ...
 
 
 #
@@ -162,7 +149,7 @@ class TempSignal:
 
 
 def mk_consumer(consumer_name="abc", user=None, **kwargs):
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
     consumer = WebsocketConsumer(**kwargs)
     consumer.channel_name = consumer_name
@@ -173,7 +160,7 @@ def mk_consumer(consumer_name="abc", user=None, **kwargs):
 
 
 async def mk_communicator(client=None, drain=True):
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
     headers = []
     if client:

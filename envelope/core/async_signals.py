@@ -11,7 +11,7 @@ from envelope.core.message import AsyncRunnable
 
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 
 @receiver(

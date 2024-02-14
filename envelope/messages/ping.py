@@ -9,7 +9,7 @@ from envelope.core.message import AsyncRunnable
 from envelope.core.message import Message
 
 if TYPE_CHECKING:
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
 
 
 @add_message(WS_INCOMING, INTERNAL)

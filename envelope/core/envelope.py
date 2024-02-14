@@ -13,7 +13,7 @@ from envelope.utils import get_message_registry
 
 if TYPE_CHECKING:
     from envelope.logging import EventLoggerAdapter
-    from envelope.consumer.websocket import WebsocketConsumer
+    from envelope.consumers.websocket import WebsocketConsumer
     from envelope.core.message import Message
     from envelope.registries import MessageRegistry
     from envelope.schemas import MessageMeta
