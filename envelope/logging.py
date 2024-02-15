@@ -2,16 +2,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
     from envelope.consumers.websocket import WebsocketConsumer
     from envelope.core import Message
 
 
 class EventLoggerAdapter(logging.LoggerAdapter):
-    def process(self, msg, kwargs):
+    def process(self, msg, kwargs: dict):
         super().process(msg, kwargs)
-        message: Message = kwargs.pop("message", None)
+        message: Message | None = kwargs.pop("message", None)
         if message:
             kwargs["extra"]["i"] = message.mm.id
             kwargs["extra"]["t"] = message.name
@@ -20,7 +19,7 @@ class EventLoggerAdapter(logging.LoggerAdapter):
             kwargs["extra"]["consumer_name"] = message.mm.consumer_name
             if message.mm.state:
                 kwargs["extra"]["s"] = message.mm.state
-        consumer: WebsocketConsumer = kwargs.pop("consumer", None)
+        consumer: WebsocketConsumer | None = kwargs.pop("consumer", None)
         if consumer:
             if consumer.user:
                 kwargs["extra"]["user"] = consumer.user.pk

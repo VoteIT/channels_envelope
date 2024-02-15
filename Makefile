@@ -19,4 +19,4 @@ run:
 	./manage.py runserver
 
 test:
-	./manage.py test envelope --keepdb
+	./manage.py test envelope

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from envelope.schemas import MessageMeta
     from envelope.core.transport import Transport
 
+__all__ = ("Envelope",)
 
 _default = object()
 

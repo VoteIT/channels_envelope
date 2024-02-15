@@ -7,14 +7,19 @@ if TYPE_CHECKING:
     from envelope.core.envelope import Envelope
     from envelope.core.message import Message
 
+__all__ = (
+    "Transport",
+    "TextTransport",
+    "DictTransport",
+)
+
 
 class Transport(ABC):
     def __init__(self, type_name: str):
         self.type_name = type_name
 
     @abstractmethod
-    def __call__(self, envelope: Envelope, message: Message):
-        ...
+    def __call__(self, envelope: Envelope, message: Message): ...
 
 
 class TextTransport(Transport):
