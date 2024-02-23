@@ -218,13 +218,18 @@ class ChannelMessageCatcher:
     ...     ch.sync_publish(msg, on_commit=False)
     >>> len(messages)
     1
+    >>> with ChannelMessageCatcher(UserChannel, 'only_this_type') as messages:
+    ...     ch = UserChannel(1)
+    ...     ch.sync_publish(msg, on_commit=False)
+    >>> len(messages)
+    0
     """
 
     def __init__(
         self,
         channel: type[PubSubChannel],
-        method: str = "sync_publish",
         *args: type[Message] | str,
+        method: str = "sync_publish",
     ):
         self.channel = channel
         self.mock = None
