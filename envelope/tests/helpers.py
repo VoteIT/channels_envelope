@@ -239,7 +239,7 @@ class ChannelMessageCatcher:
         for f in args:
             if isinstance(f, str):
                 filter.add(f)
-            elif isinstance(f, Message):
+            elif issubclass(f, Message):
                 filter.add(f.name)
             else:
                 raise TypeError("Filter args must be string or Message type")
