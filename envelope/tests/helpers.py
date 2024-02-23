@@ -209,6 +209,15 @@ async def get_consumer_name(communicator):
 class ChannelMessageCatcher:
     """
     Helper for sync_publish for instance
+
+    >>> from envelope.messages.ping import Ping
+    >>> from envelope.app.user_channel.channel import UserChannel
+    >>> msg = Ping()
+    >>> with ChannelMessageCatcher(UserChannel) as messages:
+    ...     ch = UserChannel(1)
+    ...     ch.sync_publish(msg, on_commit=False)
+    >>> len(messages)
+    1
     """
 
     def __init__(
@@ -233,7 +242,7 @@ class ChannelMessageCatcher:
         self.messages = []
 
     def __enter__(self) -> list[Message]:
-        self._patch = patch.object(self.channel, self.method)
+        self._patch = patch.object(self.channel, self.method, return_value=None)
         self.mock = self._patch.start()
         return self.messages
 
