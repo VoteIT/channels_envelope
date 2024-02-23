@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import doctest
 from pkgutil import walk_packages
+from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 from channels.auth import AuthMiddlewareStack
 from channels.testing import WebsocketCommunicator
@@ -9,6 +13,7 @@ from django_rq import get_queue
 from rq import SimpleWorker
 
 from envelope import WS_SEND_TRANSPORT
+from envelope.core import Message
 from envelope.core.transport import DictTransport
 from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
@@ -17,6 +22,10 @@ from envelope.messages.testing import ClientInfo
 from envelope.messages.testing import SendClientInfo
 from envelope.schemas import OutgoingEnvelopeSchema
 from envelope.utils import add_envelopes
+
+if TYPE_CHECKING:
+    from envelope.channels.models import PubSubChannel
+
 
 TESTING_NS = "testing"
 testing_channel_layers_setting = {
@@ -195,3 +204,56 @@ async def get_consumer_name(communicator):
     message = outgoing.unpack(payload)
     assert isinstance(message, ClientInfo)
     return message.data.consumer_name
+
+
+class ChannelMessageCatcher:
+    """
+    Helper for sync_publish for instance
+    """
+
+    def __init__(
+        self,
+        channel: type[PubSubChannel],
+        method: str = "sync_publish",
+        *args: type[Message] | str,
+    ):
+        self.channel = channel
+        self.mock = None
+        assert hasattr(channel, method)
+        self.method = method
+        filter = set()
+        for f in args:
+            if isinstance(f, str):
+                filter.add(f)
+            elif isinstance(f, Message):
+                filter.add(f.name)
+            else:
+                raise TypeError("Filter args must be string or Message type")
+        self.filter = filter or None
+        self.messages = []
+
+    def __enter__(self) -> list[Message]:
+        self._patch = patch.object(self.channel, self.method)
+        self.mock = self._patch.start()
+        return self.messages
+
+    def __exit__(self, *args):
+        self._patch.stop()
+        for call in self.mock.mock_calls:
+            msg = call.args[0]
+            assert isinstance(msg, Message)
+            if self.filter is None or msg.name in self.filter:
+                self.messages.append(msg)
+
+    def __iter__(self) -> iter[Message]:
+        return iter(self.messages)
+
+    def __bool__(self) -> bool:
+        return bool(self.messages)
+
+    def __contains__(self, item: Message | str) -> bool:
+        if isinstance(item, str):
+            return any(x for x in self if x.name == item)
+        elif isinstance(item, Message):
+            return item in self.messages
+        return False
