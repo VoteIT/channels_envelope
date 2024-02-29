@@ -88,7 +88,7 @@ class WebsocketHello(AsyncRunnable):
 
 def mk_simple_worker(queue="default") -> SimpleWorker:
     if isinstance(queue, str):
-        queue = get_queue(queue)
+        queue = get_queue(name=queue)
 
     return SimpleWorker(queues=[queue], connection=queue.connection)
 
@@ -168,10 +168,10 @@ def mk_consumer(consumer_name="abc", user=None, **kwargs):
     return consumer
 
 
-async def mk_communicator(client=None, drain=True):
+async def mk_communicator(client=None, drain=True, headers=()):
     from envelope.consumers.websocket import WebsocketConsumer
 
-    headers = []
+    headers = list(headers)
     if client:
         headers.extend(
             [
