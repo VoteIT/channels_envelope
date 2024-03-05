@@ -1,5 +1,8 @@
 from __future__ import annotations
+
+from collections import defaultdict
 from datetime import datetime
+from itertools import chain
 from itertools import groupby
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -74,25 +77,29 @@ class TransactionSender:
         from envelope.messages.common import Batch
         from envelope.utils import SenderUtil
 
-        data = []
-        for k, g in self.groupby():
-            items = list(g)
-            if len(items) > 2 and items[0].batch:
-                initial_util = items.pop(0)
-                batch = Batch.start(initial_util.msg)
-                for util in items:
-                    batch.append(util.msg)
-                items = [
-                    SenderUtil(
-                        batch,
-                        channel_name=initial_util.channel_name,
-                        group=initial_util.group,
-                        as_dict=initial_util.as_dict,
-                        run_handlers=initial_util.run_handlers,
-                        state=initial_util.state,
-                    )
-                ]
-            data.extend(items)
+        regrouped = defaultdict(list)
+        for util in self.data:
+            regrouped[util.group_key].append(util)
+        for k, items in regrouped.items():
+            if len(items) < 3 or not items[0].batch:
+                continue
+            initial_util = items.pop(0)
+            batch = Batch.start(initial_util.msg)
+            for util in items:
+                batch.append(util.msg)
+            items[:] = [
+                SenderUtil(
+                    batch,
+                    channel_name=initial_util.channel_name,
+                    group=initial_util.group,
+                    as_dict=initial_util.as_dict,
+                    run_handlers=initial_util.run_handlers,
+                    state=initial_util.state,
+                )
+            ]
+        data=[]
+        for v in regrouped.values():
+            data.extend(v)
         self.data = data
 
     def add(self, sender_util: SenderUtil):

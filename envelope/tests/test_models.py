@@ -29,6 +29,18 @@ class TransactionSenderTests(TestCase):
         self.assertIn("testing.helloabcq00testing", reformatted)
         self.assertEqual(3, len(reformatted["testing.helloabcs00testing"]))
 
+    def test_batch_mixed(self):
+        txn_sender = self._cut()
+
+        for i in range(3):
+            util = SenderUtil(WebsocketHello(), channel_name="abc", state="s")
+            txn_sender.add(util)
+            util = SenderUtil(WebsocketHello(), channel_name="cde", state="s")
+            txn_sender.add(util)
+
+        txn_sender.batch_messages()
+        self.assertEqual(["s.batch", "s.batch"], [x.msg.name for x in txn_sender.data])
+
     def test_batch(self):
         txn_sender = self._cut()
 
