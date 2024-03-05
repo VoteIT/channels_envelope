@@ -3,5 +3,6 @@ include README.md
 recursive-include envelope *
 exclude manage.py
 prune dev_settings
+prune */__pycache__
 global-exclude *.py[cod]
 global-exclude test_*
