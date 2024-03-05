@@ -12,23 +12,6 @@ class TransactionSenderTests(TestCase):
 
         return TransactionSender
 
-    def test_groupby(self):
-        txn_sender = self._cut()
-
-        for i in range(3):
-            util = SenderUtil(WebsocketHello(), channel_name="abc", state="s")
-            txn_sender.add(util)
-
-        different_ch_name = SenderUtil(WebsocketHello(), channel_name="123", state="s")
-        txn_sender.add(different_ch_name)
-        other_with_state = SenderUtil(WebsocketHello(), channel_name="abc", state="q")
-        txn_sender.add(other_with_state)
-        reformatted = dict((k, list(v)) for k, v in txn_sender.groupby())
-        self.assertEqual(3, len(reformatted))
-        self.assertIn("testing.hello123s00testing", reformatted)
-        self.assertIn("testing.helloabcq00testing", reformatted)
-        self.assertEqual(3, len(reformatted["testing.helloabcs00testing"]))
-
     def test_batch_mixed(self):
         txn_sender = self._cut()
 

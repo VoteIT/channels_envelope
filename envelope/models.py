@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
-from itertools import chain
-from itertools import groupby
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -66,9 +64,6 @@ class TransactionSender:
         for x in self:
             x()
 
-    def groupby(self):
-        return groupby(self.data, key=lambda x: x.group_key)
-
     def batch_messages(self):
         """
         Go through all messages and batch them if possible
@@ -97,7 +92,7 @@ class TransactionSender:
                     state=initial_util.state,
                 )
             ]
-        data=[]
+        data = []
         for v in regrouped.values():
             data.extend(v)
         self.data = data
