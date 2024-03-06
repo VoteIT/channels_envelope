@@ -4,7 +4,11 @@ from channels.layers import get_channel_layer
 from django.test import TestCase
 from django.test import override_settings
 
+from envelope import WS_OUTGOING
 from envelope.messages.common import ProgressNum
+from envelope.tests.helpers import WebsocketHello
+from envelope.utils import SenderUtil
+from envelope.utils import get_or_create_txn_sender
 from envelope.utils import websocket_send
 
 
@@ -43,3 +47,21 @@ class TransactionSenderIntegrationTests(TestCase):
             self.assertEqual("s", data["s"])
             # and channel fetched from initial message
             self.assertEqual("abc", mock_send.call_args[0][0])
+
+    def test_batch_mixed(self):
+        txn_sender = get_or_create_txn_sender()
+
+        for i in range(3):
+            util = SenderUtil(
+                WebsocketHello(), channel_name="abc", envelope=WS_OUTGOING
+            )
+            txn_sender.add(util)
+            util = SenderUtil(
+                WebsocketHello(), channel_name="cde", envelope=WS_OUTGOING
+            )
+            txn_sender.add(util)
+
+        txn_sender.batch_messages()
+        self.assertEqual(
+            ["s.batch", "s.batch"], [x.message.name for x in txn_sender.data]
+        )

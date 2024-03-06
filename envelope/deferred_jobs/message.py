@@ -50,7 +50,7 @@ class DeferredJob(Message, ABC):
 
     def enqueue(self, queue: Queue | None = None, **kwargs):
         if queue is None:
-            queue = get_queue(self.queue)
+            queue = get_queue(name=self.queue)
         assert isinstance(queue, Queue)
         data = {}
         if self.data:

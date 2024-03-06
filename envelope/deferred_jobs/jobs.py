@@ -59,7 +59,8 @@ def handle_failure(job, connection, exc_type, exc_value, traceback):
 
 
 def create_connection_status_on_websocket_connect(
-    user_pk: int = None,
+    *,
+    user_pk: int,
     consumer_name: str = "",
     language: str | None = None,
     online_at: datetime = None,

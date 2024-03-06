@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
-from itertools import groupby
 from typing import TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
@@ -384,31 +384,32 @@ class TransactionSender:
     def sender_util(self) -> type[SenderUtil]:
         return get_sender_util()
 
-    def groupby(self):
-        return groupby(self.data, key=lambda x: x.group_key)
-
     def batch_messages(self):
         """
         Go through all messages and batch them if possible
         """
 
+        regrouped = defaultdict(list)
+        for util in self.data:
+            regrouped[util.group_key].append(util)
+        for k, items in regrouped.items():
+            if len(items) < 3 or not items[0].batch:
+                continue
+            initial_util = items.pop(0)
+            batch = self.batch_factory.start(initial_util.message)
+            for util in items:
+                batch.append(util.message)
+            items[:] = [
+                SenderUtil(
+                    batch,
+                    channel_name=initial_util.channel_name,
+                    group=initial_util.group,
+                    envelope=initial_util.envelope,
+                )
+            ]
         data = []
-        for k, g in self.groupby():
-            items = list(g)
-            if len(items) > 2 and items[0].batch:
-                initial_util = items.pop(0)
-                batch = self.batch_factory.start(initial_util.message)
-                for util in items:
-                    batch.append(util.message)
-                items = [
-                    self.sender_util(
-                        batch,
-                        envelope=initial_util.envelope,
-                        channel_name=initial_util.channel_name,
-                        group=initial_util.group,
-                    )
-                ]
-            data.extend(items)
+        for v in regrouped.values():
+            data.extend(v)
         self.data = data
 
     def add(self, sender_util: SenderUtil):

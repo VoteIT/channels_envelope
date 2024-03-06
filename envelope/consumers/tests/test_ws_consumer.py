@@ -140,9 +140,31 @@ class WebsocketConsumerTests(TransactionTestCase):
             await communicator.send_to(text_data=text_data)
             response = await communicator.receive_from()
 
+        data = loads(response)
         self.assertEqual(
-            '{"t": "error.validation", "p": {"msg": null, "errors": [{"loc": ["__root__"], "msg": "Expecting value: line 1 column 2 (char 1)", "type": "value_error.jsondecode", "ctx": {"msg": "Expecting value", "doc": " ", "pos": 1, "lineno": 1, "colno": 2}}]}, "i": null, "s": "f"}',
-            response,
+            {
+                "t": "error.validation",
+                "p": {
+                    "msg": None,
+                    "errors": [
+                        {
+                            "loc": ["__root__"],
+                            "msg": "Expecting value: line 1 column 2 (char 1)",
+                            "type": "value_error.jsondecode",
+                            "ctx": {
+                                "msg": "Expecting value",
+                                "doc": " ",
+                                "pos": 1,
+                                "lineno": 1,
+                                "colno": 2,
+                            },
+                        }
+                    ],
+                },
+                "i": None,
+                "s": "f",
+            },
+            data,
         )
         self.assertTrue(self.signal_was_fired)
         await communicator.disconnect()
@@ -159,10 +181,15 @@ class WebsocketConsumerTests(TransactionTestCase):
         with TempSignal(outgoing_websocket_error, msg_check):
             await communicator.send_to(text_data=text_data)
             response = await communicator.receive_from()
-
+        data = loads(response)
         self.assertEqual(
-            '{"t": "error.msg_type", "p": {"msg": null, "type_name": "jeff", "envelope": "ws_incoming"}, "i": null, "s": "f"}',
-            response,
+            {
+                "t": "error.msg_type",
+                "p": {"msg": None, "type_name": "jeff", "envelope": "ws_incoming"},
+                "i": None,
+                "s": "f",
+            },
+            data,
         )
         self.assertTrue(self.signal_was_fired)
         await communicator.disconnect()
@@ -182,10 +209,15 @@ class WebsocketConsumerTests(TransactionTestCase):
             await sender.async_send()
             response = await communicator.receive_from()
 
+        data = loads(response)
         self.assertEqual(
-            '{"t": "s.client_info", "p": {"consumer_name": "%s"}, "i": null, "s": null}'
-            % consumer_name,
-            response,
+            {
+                "t": "s.client_info",
+                "p": {"consumer_name": consumer_name, "lang": "en"},
+                "i": None,
+                "s": None,
+            },
+            data,
         )
         self.assertTrue(self.signal_was_fired)
         await communicator.disconnect()
@@ -298,3 +330,29 @@ class WebsocketConsumerTests(TransactionTestCase):
         response = await communicator.receive_from()
         data = loads(response)
         self.assertEqual({"t": "s.pong", "p": None, "i": "boo", "s": "s"}, data)
+
+    @override_settings(
+        LANGUAGES=[
+            ("sv", "Svenska"),
+            ("en", "English"),
+        ]
+    )
+    async def test_language_and_threading(self):
+        communicator_en = await mk_communicator(
+            self.client, headers=[(b"accept-language", b"en")]
+        )
+        communicator_sv = await mk_communicator(
+            self.client, headers=[(b"accept-language", b"sv")]
+        )
+        # 2 times to make sure settings aren't changed!
+        checks = [(communicator_en, "en"), (communicator_sv, "sv")]
+        checks.extend(checks)
+        for communicator, lang in checks:
+            msg = SendClientInfo()
+            payload = incoming.pack(msg)
+            text_data = payload.json()
+            await communicator.send_to(text_data=text_data)
+            response = await communicator.receive_from()
+            payload = outgoing.parse(response)
+            message = outgoing.unpack(payload)
+            self.assertEqual(lang, message.data.lang)

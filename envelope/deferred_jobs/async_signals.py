@@ -4,7 +4,9 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 
 from async_signals import receiver
+from django.conf import settings
 from django.utils.timezone import now
+from django_rq import get_queue
 
 from envelope.async_signals import consumer_connected
 from envelope.async_signals import consumer_closed
@@ -16,7 +18,6 @@ from envelope.deferred_jobs.jobs import create_connection_status_on_websocket_co
 from envelope.deferred_jobs.jobs import mark_connection_action
 from envelope.deferred_jobs.jobs import update_connection_status_on_websocket_close
 from envelope.deferred_jobs.message import DeferredJob
-from envelope.deferred_jobs.queues import get_queue_or_default
 
 if TYPE_CHECKING:
     from envelope.consumers.websocket import WebsocketConsumer
@@ -26,29 +27,31 @@ logger = getLogger(__name__)
 
 @receiver(consumer_connected)
 async def dispatch_connection_job(consumer: WebsocketConsumer, **kwargs):
-    queue = get_queue_or_default("ENVELOPE_CONNECTIONS_QUEUE")
-    if queue is not None:
-        consumer.last_job = now()
-        queue.enqueue(
-            create_connection_status_on_websocket_connect,
-            user_pk=consumer.user_pk,
-            consumer_name=consumer.channel_name,
-            language=consumer.language,
-            online_at=now(),
-        )
-        logger.debug(
-            "'consumer_connected' signal 'dispatch_connection_job' to queue '%s' for consumer '%s'",
-            queue.name,
-            consumer.channel_name,
-        )
+    if consumer.user_pk:
+        if queue_name := getattr(settings, "ENVELOPE_CONNECTIONS_QUEUE", None):
+            queue = get_queue(name=queue_name)
+            consumer.last_job = now()
+            queue.enqueue(
+                create_connection_status_on_websocket_connect,
+                user_pk=consumer.user_pk,
+                consumer_name=consumer.channel_name,
+                language=consumer.language,
+                online_at=now(),
+            )
+            logger.debug(
+                "'consumer_connected' signal 'dispatch_connection_job' to queue '%s' for consumer '%s'",
+                queue.name,
+                consumer.channel_name,
+            )
 
 
 @receiver(consumer_closed)
 async def dispatch_disconnection_job(
-    consumer: WebsocketConsumer, close_code=None, **kwargs
+    consumer: WebsocketConsumer, close_code: None | int = None, **kwargs
 ):
     if consumer.user_pk:
-        if queue := get_queue_or_default("ENVELOPE_CONNECTIONS_QUEUE"):
+        if queue_name := getattr(settings, "ENVELOPE_CONNECTIONS_QUEUE", None):
+            queue = get_queue(name=queue_name)
             consumer.last_job = now()  # We probably don't need to care about this :)
             queue.enqueue(
                 update_connection_status_on_websocket_close,
@@ -66,9 +69,10 @@ async def dispatch_disconnection_job(
 
 
 @receiver(incoming_websocket_message)
-def maybe_update_connection(*, consumer: WebsocketConsumer, **kwargs):
+async def maybe_update_connection(*, consumer: WebsocketConsumer, **kwargs):
     if consumer.connection_update_interval is not None and consumer.user_pk:
-        if queue := get_queue_or_default("ENVELOPE_TIMESTAMP_QUEUE"):
+        if queue_name := getattr(settings, "ENVELOPE_TIMESTAMP_QUEUE", None):
+            queue = get_queue(name=queue_name)
             # We should check if we need to update
             if (
                 consumer.last_job is None
@@ -99,5 +103,4 @@ async def queue_deferred_job(
         await message.pre_queue(consumer=consumer, **kwargs)
         if message.should_run:
             message.enqueue()
-            # FIXME: Probably shouldn't mark this here. Rethink design?
             consumer.last_job = now()

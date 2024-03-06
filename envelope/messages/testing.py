@@ -28,13 +28,16 @@ class SendClientInfo(AsyncRunnable):
     name = "s.send_client_info"
 
     async def run(self, *, consumer: WebsocketConsumer, **kwargs):
-        response = ClientInfo.from_message(self, consumer_name=consumer.channel_name)
+        response = ClientInfo.from_message(
+            self, consumer_name=consumer.channel_name, lang=consumer.language
+        )
         await consumer.send_ws_message(response)
         return response
 
 
 class ClientInfoSchema(BaseModel):
     consumer_name: str
+    lang: str | None
 
 
 @add_message(WS_OUTGOING)

@@ -59,6 +59,16 @@ class ChannelsEnvelopeConfig(AppConfig):
                 f"{sender_util} is not a subclass of envelope.utils.SenderUtil - check ENVELOPE_SENDER_UTIL in settings."
             )
 
+        conn_update_interval = getattr(
+            settings, "ENVELOPE_CONNECTION_UPDATE_INTERVAL", None
+        )
+        if conn_update_interval is not None and not isinstance(
+            conn_update_interval, int
+        ):
+            raise ImproperlyConfigured(
+                "ENVELOPE_CONNECTION_UPDATE_INTERVAL must be int or None"
+            )
+
     @staticmethod
     def check_registries_names():
         """
@@ -105,6 +115,16 @@ class ChannelsEnvelopeConfig(AppConfig):
                         raise ImproperlyConfigured(
                             f"Message {msg} set to queue {msg.queue} which doesn't exist in settings.RQ_QUEUES"
                         )
+        for name in ("ENVELOPE_TIMESTAMP_QUEUE", "ENVELOPE_CONNECTIONS_QUEUE"):
+            if queue_name := getattr(settings, name, None):
+                if queue_name not in rq_queues:
+                    raise ImproperlyConfigured(
+                        f"settings.{name} set to '{queue_name}' which doesn't exist in RQ_QUEUES"
+                    )
+            else:
+                logger.info(
+                    "%s is None, any related functionality will be disabled.", name
+                )
 
     @staticmethod
     def check_layer_config():
