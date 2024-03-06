@@ -1,6 +1,9 @@
 from __future__ import annotations
+
+from itertools import chain
 from logging import getLogger
 
+from channels.layers import get_channel_layer
 from django.apps import AppConfig
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -32,6 +35,7 @@ class ChannelsEnvelopeConfig(AppConfig):
         self.check_settings_and_import()
         self.check_registries_names()
         self.check_rq_config()
+        self.check_layer_config()
 
     @staticmethod
     def check_settings_and_import():
@@ -101,3 +105,31 @@ class ChannelsEnvelopeConfig(AppConfig):
                         raise ImproperlyConfigured(
                             f"Message {msg} set to queue {msg.queue} which doesn't exist in settings.RQ_QUEUES"
                         )
+
+    @staticmethod
+    def check_layer_config():
+        """
+        >>> from django.test import override_settings
+        >>> with override_settings(CHANNEL_LAYERS={'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}):
+        ...     ChannelsEnvelopeConfig.check_layer_config()
+        >>> with override_settings(CHANNEL_LAYERS={}):
+        ...     ChannelsEnvelopeConfig.check_layer_config()
+        Traceback (most recent call last):
+        ...
+        django.core.exceptions.ImproperlyConfigured: ...
+        """
+        from envelope.registries import envelope_registry
+        from envelope.registries import pubsub_channel_registry
+        from envelope.registries import context_channel_registry
+
+        for item in chain(
+            envelope_registry.values(),
+            pubsub_channel_registry.values(),
+            context_channel_registry.values(),
+        ):
+            layer = get_channel_layer(item.layer_name)
+            if layer is None:
+                raise ImproperlyConfigured(
+                    f"{item} requires the channel_layer {item.layer_name} "
+                    f"to be configured in settings. See channels config on layers."
+                )
