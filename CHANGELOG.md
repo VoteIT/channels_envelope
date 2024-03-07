@@ -1,6 +1,6 @@
 # Changelog
 
-## dev 
+## 1.0.1 (2024-03-07)
 
 * RecheckSubscriptionsSchema subscriptions changed from set to list to 
   fix common serialization problems.
