@@ -47,7 +47,7 @@ class ChannelCommand:
     ) -> ContextChannel:
         ch = get_context_channel(channel_type)
         # This may cause errors right?
-        return ch(pk, consumer_name)
+        return ch(pk, consumer_channel=consumer_name)
 
 
 @add_message(WS_INCOMING)
@@ -69,6 +69,8 @@ class Subscribe(ChannelCommand, DeferredJob):
             return list(app_state)
 
     async def pre_queue(self, consumer: WebsocketConsumer, **kwargs) -> Subscribed:
+        if self.mm.consumer_name is None:
+            self.mm.consumer_name = consumer.channel_name
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )

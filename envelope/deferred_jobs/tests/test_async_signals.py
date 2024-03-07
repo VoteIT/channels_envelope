@@ -115,7 +115,6 @@ class DeferredJobsAsyncSignalsTests(TestCase):
     async def test_maybe_update_connection(self):
         self.mock_consumer.user_pk = self.user.pk
         self.mock_consumer.connection_update_interval = 10
-        self.user = self.user
 
         with patch(
             "django_rq.queues.get_redis_connection",

@@ -48,8 +48,15 @@ class PubSubChannel(ABC):
     def __init__(
         self,
         consumer_channel: str | None = None,
+        *,
+        envelope_name: str | None = None,
+        layer_name: str | None = None,
     ):
         self.consumer_channel = consumer_channel
+        if envelope_name:
+            self.envelope_name = envelope_name
+        if layer_name:
+            self.layer_name = layer_name
 
     async def subscribe(self):
         if not self.consumer_channel:  # pragma: no coverage
@@ -98,9 +105,16 @@ class ContextChannel(PubSubChannel, ABC):
         self,
         pk: int,
         consumer_channel: str | None = None,
+        *,
+        envelope_name: str | None = None,
+        layer_name: str | None = None,
     ):
         self.pk = pk
-        super().__init__(consumer_channel)
+        super().__init__(
+            consumer_channel=consumer_channel,
+            envelope_name=envelope_name,
+            layer_name=layer_name,
+        )
 
     @property
     def channel_name(self) -> str:
@@ -126,10 +140,20 @@ class ContextChannel(PubSubChannel, ABC):
 
     @classmethod
     def from_instance(
-        cls, instance: models.Model, consumer_channel: str | None = None
+        cls,
+        instance: models.Model,
+        consumer_channel: str | None = None,
+        *,
+        envelope_name: str | None = None,
+        layer_name: str | None = None,
     ) -> ContextChannel:
         assert isinstance(instance, cls.model), f"Instance must be a {cls.model}"
-        inst = cls(instance.pk, consumer_channel)
+        inst = cls(
+            instance.pk,
+            consumer_channel=consumer_channel,
+            envelope_name=envelope_name,
+            layer_name=layer_name,
+        )
         # Set context straight away to avoid lookup
         inst.context = instance
         return inst
