@@ -4,8 +4,8 @@ import os
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.test import override_settings
-from envelope.tests.helpers import load_doctests
-from envelope.tests.helpers import testing_channel_layers_setting
+from envelope.testing import load_doctests
+from envelope.testing import testing_channel_layers_setting
 
 User = get_user_model()
 

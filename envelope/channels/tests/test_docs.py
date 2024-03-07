@@ -1,4 +1,4 @@
-from envelope.tests.helpers import load_doctests
+from envelope.testing import load_doctests
 
 
 def load_tests(loader, tests, pattern):

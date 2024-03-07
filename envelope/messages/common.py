@@ -36,12 +36,10 @@ class BatchMessage(Message, ABC):
 
     @classmethod
     @abstractmethod
-    def start(cls, msg: Message):
-        ...
+    def start(cls, msg: Message): ...
 
     @abstractmethod
-    def append(self, msg: Message):
-        ...
+    def append(self, msg: Message): ...
 
 
 @add_message(WS_OUTGOING)
@@ -53,7 +51,7 @@ class Batch(BatchMessage):
     @classmethod
     def start(cls, msg: Message):
         """
-        >>> from envelope.tests.helpers import WebsocketHello
+        >>> from envelope.testing import WebsocketHello
         >>> hello = WebsocketHello()
         >>> batch = Batch.start(hello)
         >>> batch.data
@@ -73,7 +71,7 @@ class Batch(BatchMessage):
 
     def append(self, msg: Message):
         """
-        >>> from envelope.tests.helpers import WebsocketHello
+        >>> from envelope.testing import WebsocketHello
         >>> hello = WebsocketHello()
         >>> batch = Batch.start(hello)
         >>> batch.append(hello)
@@ -120,7 +118,7 @@ class Batch2(BatchMessage):
     @classmethod
     def start(cls, msg: Message, common: dict | None = None):
         """
-        >>> from envelope.tests.helpers import WebsocketHello
+        >>> from envelope.testing import WebsocketHello
         >>> hello = WebsocketHello()
         >>> batch = Batch2.start(hello)
         >>> batch.data
@@ -149,7 +147,7 @@ class Batch2(BatchMessage):
 
     def append(self, msg: Message):
         """
-        >>> from envelope.tests.helpers import WebsocketHello
+        >>> from envelope.testing import WebsocketHello
         >>> hello = WebsocketHello()
         >>> batch = Batch2.start(hello)
         >>> batch.append(hello)

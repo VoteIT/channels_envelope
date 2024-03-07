@@ -2,7 +2,6 @@ from datetime import datetime
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.db.transaction import TransactionManagementError
 from django.db.transaction import get_connection
 from django.test import SimpleTestCase
@@ -11,7 +10,7 @@ from django.test import override_settings
 
 from envelope.messages.errors import BadRequestError
 from envelope.messages.ping import Pong
-from envelope.tests.helpers import testing_channel_layers_setting
+from envelope.testing import testing_channel_layers_setting
 from envelope.utils import get_or_create_txn_sender
 
 User = get_user_model()

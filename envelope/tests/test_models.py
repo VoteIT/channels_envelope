@@ -6,7 +6,7 @@ from django.test import override_settings
 
 from envelope import WS_OUTGOING
 from envelope.messages.common import ProgressNum
-from envelope.tests.helpers import WebsocketHello
+from envelope.testing import WebsocketHello
 from envelope.utils import SenderUtil
 from envelope.utils import get_or_create_txn_sender
 from envelope.utils import websocket_send

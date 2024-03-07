@@ -5,7 +5,7 @@ from django.test import TestCase
 
 from envelope.async_signals import incoming_websocket_message
 from envelope.channels.messages import Subscriptions
-from envelope.tests.helpers import mk_consumer
+from envelope.testing import mk_consumer
 
 User = get_user_model()
 

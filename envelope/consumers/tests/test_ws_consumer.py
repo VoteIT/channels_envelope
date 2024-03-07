@@ -2,7 +2,6 @@ from json import loads
 
 from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.test import TransactionTestCase
 from django.test import override_settings
 
@@ -23,11 +22,11 @@ from envelope.messages.errors import ValidationErrorMsg
 from envelope.messages.ping import Ping
 from envelope.messages.ping import Pong
 from envelope.messages.testing import SendClientInfo
-from envelope.tests.helpers import TempSignal
-from envelope.tests.helpers import get_consumer_name
-from envelope.tests.helpers import mk_communicator
-from envelope.tests.helpers import mk_consumer
-from envelope.tests.helpers import testing_channel_layers_setting
+from envelope.testing import TempSignal
+from envelope.testing import get_consumer_name
+from envelope.testing import mk_communicator
+from envelope.testing import mk_consumer
+from envelope.testing import testing_channel_layers_setting
 from envelope.utils import SenderUtil
 from envelope.utils import get_sender_util
 

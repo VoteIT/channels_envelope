@@ -18,10 +18,10 @@ from envelope.channels.messages import Subscribe
 from envelope.channels.messages import Subscribed
 from envelope.channels.schemas import ChannelSchema
 from envelope.signals import channel_subscribed
-from envelope.tests.helpers import TempSignal
-from envelope.tests.helpers import WebsocketHello
-from envelope.tests.helpers import mk_consumer
-from envelope.tests.helpers import testing_channel_layers_setting
+from envelope.testing import TempSignal
+from envelope.testing import WebsocketHello
+from envelope.testing import mk_consumer
+from envelope.testing import testing_channel_layers_setting
 
 
 User = get_user_model()

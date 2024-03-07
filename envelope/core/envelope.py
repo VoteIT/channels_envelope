@@ -92,7 +92,7 @@ class Envelope:
         MessageMeta(id=None, user_pk=None, consumer_name=None, language=None, state=None)
 
         And with consumer
-        >>> from envelope.tests.helpers import mk_consumer
+        >>> from envelope.testing import mk_consumer
         >>> consumer = mk_consumer(consumer_name='abc')
         >>> msg = env.unpack(data, consumer=consumer)
         >>> msg.mm
