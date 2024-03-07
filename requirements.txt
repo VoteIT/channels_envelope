@@ -1,5 +1,5 @@
--e .[testing]
-#psycopg2-binary
-ipython
+-e .
 tox
 black
+coverage
+fakeredis

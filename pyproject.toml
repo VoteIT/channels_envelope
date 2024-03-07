@@ -1,0 +1,30 @@
+[project]
+name = "channels-envelope"
+version = "1.0.0"
+authors = [
+  { name="VoteIT dev team", email="info@voteit.se" },
+]
+description = "Message handling for Django channels"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: POSIX",
+]
+
+dependencies = [
+    "channels[daphne]",
+    "django",
+    "django-rq",
+    "rq",
+    "pydantic < 2",
+    "async-signals",
+]
+[tool.setuptools.packages.find]
+where = ["envelope"]
+[project.urls]
+Homepage = "https://github.com/VoteIT/channels_envelope"
+Issues = "https://github.com/VoteIT/channels_envelope/issues"
