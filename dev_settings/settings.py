@@ -77,10 +77,11 @@ WSGI_APPLICATION = "dev_settings.wsgi.application"
 ASGI_APPLICATION = "dev_settings.routing.application"
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": ["redis://127.0.0.1:16379/10"],
-        },
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+        # "BACKEND": "channels_redis.core.RedisChannelLayer",
+        #        "CONFIG": {
+        #            "hosts": ["redis://127.0.0.1:16379/10"],
+        #        },
     },
 }
 
