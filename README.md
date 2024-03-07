@@ -42,6 +42,13 @@ Some core principles:
 * Basic Django knowledge.
 * Read up on Django Channels and what it does - especially consumers.
 
+## Dependencies - and why
+
+* `RQ` with `django_rq` handles queues and deferred actions.
+* `async-signals` for exactly what the package says. Since Django 5 this works in Djangos default signals,
+we may refactor later.
+* `pydantic` for all schemas, but with a bit of refactoring it would be possible to use any serializer.  
+
 ## Core concepts
 
 ### Envelope
@@ -51,7 +58,7 @@ Performs serialization/deserialization and basic validation of message
 payload. The registered envelopes always have a single direction via a single transport type,
 for instance incoming websocket message, or outgoing websocket message.
 
-Envelopes have short keys where only 't' is required.
+Envelopes have short keys where only `t` is required.
 
 #### Envelope schema - keys
 
@@ -125,6 +132,40 @@ Each message direction has its own async signal.
 
 ```
 
+## Settings
+
+Most of the required settings will be handled by django_rq and channels. But there are some aspects
+of envelope that can be tweaked.
+
+Remember that message registries will contain some mesasges by default - if you don't want that,
+make sure to clear them.
+
+ENVELOPE_CONNECTIONS_QUEUE - default: None
+
+: Name of the `RQ` queue to use for jobs that will create Connection objects.
+`None` disables functionality.
+
+ENVELOPE_TIMESTAMP_QUEUE - default: None
+
+: Name of the `RQ` queue to use for timestamp updates for Connection objects.
+`None` disables functionality.
+
+ENVELOPE_CONNECTION_UPDATE_INTERVAL - in seconds, default: 180
+
+: How often should a timestamp job be queued? `None` disables functionality.
+
+ENVELOPE_BATCH_MESSAGE - default: `envelope.messages.common.BatchMessage`
+
+: Which class to use for batch messages.
+
+ENVELOPE_SENDER_UTIL - default: `envelope.utils.SenderUtil`
+
+: Which class to use for sender util.
+
+
+ENVELOPE_ALLOW_UNAUTHENTICATED - default: False
+
+: Experimental
 
 ## Usage examples
 
@@ -135,7 +176,7 @@ A user that has several tabs connected to the same server will see the change in
 
 Make sure envelope.app.user_channel is in INSTALLED_APPS for this example to work.
 
-```doctest
+```doctest python
 
 >>> from pydantic import BaseModel
 >>> from django.contrib.auth import get_user_model

@@ -20,3 +20,10 @@ run:
 
 test:
 	./manage.py test envelope
+
+btest:
+	if [ -d dist ]; then \
+		rm -r dist; \
+	fi
+	python -m build .
+	cd dist && tar xvfz *.tar.gz

@@ -8,4 +8,4 @@
 build
 venv
 volumes
-_envelope
+dist
