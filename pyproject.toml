@@ -23,8 +23,10 @@ dependencies = [
     "pydantic < 2",
     "async-signals",
 ]
-[tool.setuptools.packages.find]
-where = ["envelope"]
+
+[tool.setuptools]
+packages = ["envelope"]
+
 [project.urls]
 Homepage = "https://github.com/VoteIT/channels_envelope"
 Issues = "https://github.com/VoteIT/channels_envelope/issues"

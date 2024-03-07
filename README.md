@@ -1,8 +1,9 @@
 # Envelope
 
-**Note**: This is still experimental.
+**Note**: While some of this may be work in progress, we'll make sure to bump major version
+number whenever we change anything that might break stuff.
 
-The readme is also work in progress...
+We haven't written docs for most things, but the source code should hopefully be clear enough.
 
 ## Introduction
 
