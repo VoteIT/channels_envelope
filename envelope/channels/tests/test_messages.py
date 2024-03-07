@@ -242,7 +242,8 @@ class RecheckChannelSubscriptionsTests(TestCase):
         **kwargs,
     ):
         return self._cut(
-            mm={"user_pk": user and user.pk or None, "consumer_name": consumer_name},
+            mm={"user_pk": user and user.pk or None},
+            consumer_name=consumer_name,
             subscriptions=subscriptions,
         )
 
@@ -253,13 +254,13 @@ class RecheckChannelSubscriptionsTests(TestCase):
         consumer.subscriptions.add(sub1)
         msg = self._mk_msg(subscriptions={sub2})
         await msg.pre_queue(consumer)
-        self.assertEqual({sub1, sub2}, msg.data.subscriptions)
+        self.assertEqual({sub1, sub2}, set(msg.data.subscriptions))
 
     def test_should_run(self):
         msg = self._mk_msg()
         self.assertFalse(msg.should_run)
         sub1 = ChannelSchema(pk=self.user_one.pk, channel_type=UserChannel.name)
-        msg.data.subscriptions.add(sub1)
+        msg.data.subscriptions.append(sub1)
         self.assertTrue(msg.should_run)
 
     def test_run_job(self):

@@ -164,6 +164,13 @@ class Left(AsyncRunnable):
 
 
 class SubscriptionsSchema(BaseModel):
+    """
+    >>> from envelope.testing import serialization_check
+    >>> data = SubscriptionsSchema(subscriptions=[{'pk': '1', 'channel_type': 'user'}])
+    >>> serialization_check(data)
+    '{"subscriptions": [{"pk": 1, "channel_type": "user"}]}'
+    """
+
     subscriptions: list[ChannelSchema]
 
 
@@ -174,9 +181,8 @@ class Subscriptions(Message):
     data: SubscriptionsSchema
 
 
-class RecheckSubscriptionsSchema(BaseModel):
-    subscriptions: set[ChannelSchema] = set()
-    consumer_name: str | None
+class RecheckSubscriptionsSchema(SubscriptionsSchema):
+    consumer_name: str
 
 
 @add_message(INTERNAL)
@@ -198,7 +204,11 @@ class RecheckChannelSubscriptions(DeferredJob):
         assert consumer.channel_name
         # It might be sent by someone else
         self.data.consumer_name = consumer.channel_name
-        self.data.subscriptions.update(consumer.subscriptions)
+        [
+            self.data.subscriptions.append(x)
+            for x in consumer.subscriptions
+            if x not in self.data.subscriptions
+        ]
 
     @property
     def should_run(self) -> bool:
@@ -225,6 +235,6 @@ class RecheckChannelSubscriptions(DeferredJob):
                     channel_type=channel_info.channel_type,
                     pk=channel_info.pk,
                 )
-                websocket_send(msg)
+                websocket_send(msg, channel_name=self.data.consumer_name)
                 results.append(channel_info)
         return results

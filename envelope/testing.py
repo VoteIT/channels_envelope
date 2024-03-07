@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import doctest
+from json import dumps
 from pkgutil import walk_packages
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from channels.testing import WebsocketCommunicator
 from django.dispatch import Signal
 from async_signals import Signal as AsyncSignal
 from django_rq import get_queue
+from pydantic import BaseModel
 from rq import SimpleWorker
 
 from envelope import WS_SEND_TRANSPORT
@@ -271,3 +273,8 @@ class ChannelMessageCatcher:
         elif isinstance(item, Message):
             return item in self.messages
         return False
+
+
+def serialization_check(instance: BaseModel) -> str:
+    data = instance.dict()
+    return dumps(data)

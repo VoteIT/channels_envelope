@@ -30,3 +30,4 @@ packages = ["envelope"]
 [project.urls]
 Homepage = "https://github.com/VoteIT/channels_envelope"
 Issues = "https://github.com/VoteIT/channels_envelope/issues"
+Changelog = "https://github.com/VoteIT/channels_envelope/blob/main/CHANGELOG.md"
