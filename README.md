@@ -177,7 +177,7 @@ A user that has several tabs connected to the same server will see the change in
 
 Make sure envelope.app.user_channel is in INSTALLED_APPS for this example to work.
 
-```doctest python
+```doctest
 
 >>> from pydantic import BaseModel
 >>> from django.contrib.auth import get_user_model
