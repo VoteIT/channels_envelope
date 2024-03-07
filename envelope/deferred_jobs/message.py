@@ -33,7 +33,7 @@ class DeferredJob(Message, ABC):
     # connection: None | Redis = None
     atomic: bool = True
     on_worker: bool = False
-    job: callable | str = "envelope.deferred_jobs.jobs.default_incoming_websocket"
+    job: callable | str = "envelope.deferred_jobs.jobs.default_job"
     should_run: bool = True  # Mark as false to abort run
 
     async def pre_queue(self, **kwargs):
@@ -60,6 +60,10 @@ class DeferredJob(Message, ABC):
             kwargs["job_timeout"] = self.job_timeout
         if self.ttl:
             kwargs["ttl"] = self.ttl
+        if self.mm.env is None:
+            raise ValueError(
+                "To call enqueue on DeferredJob messages, env must be present in message meta."
+            )
         return queue.enqueue(
             self.job,
             t=self.name,

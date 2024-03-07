@@ -25,6 +25,7 @@ class MessageMeta(BaseModel):
     consumer_name: str | None
     language: str | None = Field(alias="l")
     state: str | None = Field(alias="s")
+    env: str | None = None
 
     class Config:
         allow_population_by_field_name = True

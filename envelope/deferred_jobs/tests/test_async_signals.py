@@ -9,6 +9,7 @@ from fakeredis import FakeStrictRedis
 from rq import Queue
 from rq import SimpleWorker
 
+from envelope import WS_INCOMING
 from envelope.channels.messages import Subscribe
 from envelope.channels.messages import Subscribed
 from envelope.logging import getEventLogger
@@ -134,7 +135,7 @@ class DeferredJobsAsyncSignalsTests(TestCase):
 
     async def test_queue_deferred_job(self):
         msg = Subscribe(
-            mm={"user_pk": self.user.pk},
+            mm={"user_pk": self.user.pk, "env": WS_INCOMING},
             channel_type="user",
             pk=self.user.pk,
         )

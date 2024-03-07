@@ -120,10 +120,11 @@ def mark_connection_action(
     update_connection_status(user_pk, channel_name=consumer_name, last_action=action_at)
 
 
-def default_incoming_websocket(
+def default_job(
     data: dict, mm: dict, t: str, *, enqueued_at: datetime = None, **kwargs
 ):
-    envelope = get_envelope(WS_INCOMING)
+    env_name = mm.get("env", WS_INCOMING)
+    envelope = get_envelope(env_name)
     # We won't handle key error here. Message name should've been checked when it was received.
     message = envelope.registry[t](mm=mm, data=data)
     run_job(message, enqueued_at=enqueued_at)

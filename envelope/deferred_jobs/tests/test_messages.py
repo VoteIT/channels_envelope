@@ -57,7 +57,7 @@ class DeferredJobTests(TestCase):
         self.assertTrue(Connection.objects.filter(channel_name="abc").exists())
 
     def test_enqueue_via_msg(self):
-        msg = self._mk_msg(mm={"user_pk": self.user.pk})
+        msg = self._mk_msg(mm={"user_pk": self.user.pk, "env": WS_INCOMING})
         connection = FakeStrictRedis()
         queue = get_queue(connection=connection)
         msg.enqueue(
@@ -97,10 +97,14 @@ class DummyContextActionTests(TestCase):
         )
 
     def test_enqueue_via_msg(self):
-        msg = self._mk_msg(pk=self.conn.pk, mm={"user_pk": self.user.pk})
+        msg = self._mk_msg(
+            pk=self.conn.pk, mm={"user_pk": self.user.pk, "env": WS_INCOMING}
+        )
         connection = FakeStrictRedis()
         queue = get_queue(connection=connection)
-        msg.enqueue(queue=queue)
+        msg.enqueue(
+            queue=queue,
+        )
         worker = SimpleWorker([queue], connection=connection)
         self.assertTrue(worker.work(burst=True))
         self.assertTrue(

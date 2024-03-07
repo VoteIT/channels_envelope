@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from envelope import Error
 from envelope.logging import getEventLogger
 from envelope.schemas import EnvelopeSchema
+from envelope.schemas import MessageMeta
 from envelope.utils import get_error_type
 from envelope.utils import get_message_registry
 
@@ -16,7 +17,6 @@ if TYPE_CHECKING:
     from envelope.consumers.websocket import WebsocketConsumer
     from envelope.core.message import Message
     from envelope.registries import MessageRegistry
-    from envelope.schemas import MessageMeta
     from envelope.core.transport import Transport
 
 __all__ = ("Envelope",)
@@ -89,14 +89,14 @@ class Envelope:
         >>> isinstance(msg, msg_class)
         True
         >>> msg.mm
-        MessageMeta(id=None, user_pk=None, consumer_name=None, language=None, state=None)
+        MessageMeta(id=None, user_pk=None, consumer_name=None, language=None, state=None, env='testing')
 
         And with consumer
         >>> from envelope.testing import mk_consumer
         >>> consumer = mk_consumer(consumer_name='abc')
         >>> msg = env.unpack(data, consumer=consumer)
         >>> msg.mm
-        MessageMeta(id=None, user_pk=None, consumer_name='abc', language=None, state=None)
+        MessageMeta(id=None, user_pk=None, consumer_name='abc', language=None, state=None, env='testing')
 
         And user
         >>> class MockUser:
@@ -106,14 +106,14 @@ class Envelope:
         >>> consumer = mk_consumer(consumer_name='abc', user=user)
         >>> msg = env.unpack(data, consumer=consumer)
         >>> msg.mm
-        MessageMeta(id=None, user_pk=1, consumer_name='abc', language=None, state=None)
+        MessageMeta(id=None, user_pk=1, consumer_name='abc', language=None, state=None, env='testing')
 
         And id + state
         >>> data.i = 5
         >>> data.s = 's'
         >>> msg = env.unpack(data, consumer=consumer)
         >>> msg.mm
-        MessageMeta(id='5', user_pk=1, consumer_name='abc', language=None, state='s')
+        MessageMeta(id='5', user_pk=1, consumer_name='abc', language=None, state='s', env='testing')
 
         Specifying both consumer and mm isn't allowed
         >>> env.unpack(data, consumer=consumer, mm={'user_pk': 1})
@@ -143,6 +143,11 @@ class Envelope:
                 envelope=self.name,
             )
             raise error from exc
+        # Attach origin of unpacked, needed by workers for instance
+        if isinstance(mm, dict):
+            mm["env"] = self.name
+        elif isinstance(mm, MessageMeta):
+            mm.env = self.name
         msg = msg_class(
             mm=mm,
             data=data.p,
