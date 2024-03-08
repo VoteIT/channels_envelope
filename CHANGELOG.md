@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.2 (dev)
+## 1.0.2 (2024-03-08)
 
 * Internal messages needed a custom job which wasn't intuitive or easy to debug.
   Passing along env as envelope_name instead.
