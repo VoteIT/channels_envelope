@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import doctest
 from json import dumps
+from json import loads
 from pkgutil import walk_packages
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -12,8 +13,13 @@ from django.dispatch import Signal
 from async_signals import Signal as AsyncSignal
 from django_rq import get_queue
 from pydantic import BaseModel
+from rq import Queue
 from rq import SimpleWorker
 
+from envelope import ERRORS
+from envelope import INTERNAL
+from envelope import WS_INCOMING
+from envelope import WS_OUTGOING
 from envelope import WS_SEND_TRANSPORT
 from envelope.core import Message
 from envelope.core.transport import DictTransport
@@ -24,9 +30,11 @@ from envelope.messages.testing import ClientInfo
 from envelope.messages.testing import SendClientInfo
 from envelope.schemas import OutgoingEnvelopeSchema
 from envelope.utils import add_envelopes
+from envelope.utils import get_envelope
 
 if TYPE_CHECKING:
     from envelope.channels.models import PubSubChannel
+    from fakeredis import FakeRedis
 
 
 TESTING_NS = "testing"
@@ -93,6 +101,13 @@ def mk_simple_worker(queue="default") -> SimpleWorker:
         queue = get_queue(name=queue)
 
     return SimpleWorker(queues=[queue], connection=queue.connection)
+
+
+def work_with_conn(queue: str = "default", *, connection: FakeRedis):
+    queue = Queue(name=queue, connection=connection)
+    worker = SimpleWorker([queue], connection=connection)
+    result = worker.work(burst=True)
+    assert result, "Worker did noting"
 
 
 # class ResetRegistries:
@@ -170,6 +185,45 @@ def mk_consumer(consumer_name="abc", user=None, **kwargs):
     return consumer
 
 
+class EnvelopeWebsocketCommunicator(WebsocketCommunicator):
+
+    async def send_msg(self, msg: Message):
+        envelope = get_envelope(WS_INCOMING)
+        assert (
+            msg.name in envelope.registry
+        ), f"{msg.name} doesn't exist in message registry registry {envelope.name}"
+        payload = envelope.pack(msg)
+        text_data = payload.json()
+        await self.send_to(text_data=text_data)
+
+    async def send_internal(self, msg: Message):
+        envelope = get_envelope(INTERNAL)
+        assert (
+            msg.name in envelope.registry
+        ), f"{msg.name} doesn't exist in message registry registry {envelope.name}"
+        payload = envelope.pack(msg)
+        data = payload.dict()
+        await self.send_input({"type": "internal.msg", **data})
+
+    async def receive_msg(self) -> Message:
+        response = await self.receive_from(0.1)
+        # We're guessing here since this is normally frontend domain :)
+        data = loads(response)
+        if data["t"].startswith("error"):
+            envelope = get_envelope(ERRORS)
+        else:
+            envelope = get_envelope(WS_OUTGOING)
+        data = envelope.parse(response)
+        return envelope.unpack(data)
+
+    async def get_consumer_name(self):
+        msg = SendClientInfo()
+        await self.send_msg(msg)
+        response = await self.receive_msg()
+        assert isinstance(response, ClientInfo), f"Got {response} instead of ClientInfo"
+        return response.data.consumer_name
+
+
 async def mk_communicator(client=None, drain=True, headers=()):
     from envelope.consumers.websocket import WebsocketConsumer
 
@@ -181,7 +235,7 @@ async def mk_communicator(client=None, drain=True, headers=()):
                 (b"cookie", client.cookies.output(header="", sep="; ").encode()),
             ]
         )
-    communicator = WebsocketCommunicator(
+    communicator = EnvelopeWebsocketCommunicator(
         AuthMiddlewareStack(WebsocketConsumer.as_asgi()),
         "/testws/",
         headers=headers,
@@ -192,20 +246,6 @@ async def mk_communicator(client=None, drain=True, headers=()):
         while communicator.output_queue.qsize():
             await communicator.output_queue.get()
     return communicator
-
-
-async def get_consumer_name(communicator):
-    from envelope.envelopes import incoming, outgoing
-
-    msg = SendClientInfo()
-    payload = incoming.pack(msg)
-    text_data = payload.json()
-    await communicator.send_to(text_data=text_data)
-    response = await communicator.receive_from()
-    payload = outgoing.parse(response)
-    message = outgoing.unpack(payload)
-    assert isinstance(message, ClientInfo)
-    return message.data.consumer_name
 
 
 class ChannelMessageCatcher:

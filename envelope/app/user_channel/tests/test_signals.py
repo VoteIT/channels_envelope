@@ -6,7 +6,6 @@ from django.test import TransactionTestCase
 from envelope.app.user_channel.channel import UserChannel
 from envelope.envelopes import outgoing
 from envelope.messages.common import Status
-from envelope.testing import get_consumer_name
 from envelope.testing import mk_communicator
 from envelope.testing import testing_channel_layers_setting
 
@@ -40,7 +39,7 @@ class SubscribeSignalIntegrationTests(TransactionTestCase):
         )
         layer = get_channel_layer()
         self.assertIn(f"user_{self.jane.pk}", layer.groups)
-        consumer_name = await get_consumer_name(communicator)
+        consumer_name = await communicator.get_consumer_name()
         ch = UserChannel(self.jane.pk, consumer_channel=consumer_name)
         msg = Status(state="s")
         await ch.publish(msg)

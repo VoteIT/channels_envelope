@@ -23,7 +23,6 @@ from envelope.messages.ping import Ping
 from envelope.messages.ping import Pong
 from envelope.messages.testing import SendClientInfo
 from envelope.testing import TempSignal
-from envelope.testing import get_consumer_name
 from envelope.testing import mk_communicator
 from envelope.testing import mk_consumer
 from envelope.testing import testing_channel_layers_setting
@@ -196,7 +195,7 @@ class WebsocketConsumerTests(TransactionTestCase):
     async def test_internal_msg(self):
         self.signal_was_fired = False
         communicator = await mk_communicator(self.client)
-        consumer_name = await get_consumer_name(communicator)
+        consumer_name = await communicator.get_consumer_name()
         msg = SendClientInfo(mm={"consumer_name": consumer_name})
         sender = get_sender_util()(msg, channel_name=consumer_name, envelope=INTERNAL)
 
@@ -287,7 +286,7 @@ class WebsocketConsumerTests(TransactionTestCase):
     async def test_send_error(self):
         # self.signal_was_fired = False
         communicator = await mk_communicator(self.client)
-        consumer_name = await get_consumer_name(communicator)
+        consumer_name = await communicator.get_consumer_name()
         # The error will be received as a dict
 
         msg = MessageTypeError(

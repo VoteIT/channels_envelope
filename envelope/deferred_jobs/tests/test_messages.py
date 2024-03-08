@@ -7,6 +7,8 @@ from rq import SimpleWorker
 from envelope import WS_INCOMING
 from envelope.deferred_jobs.message import ContextAction
 from envelope.deferred_jobs.message import DeferredJob
+from envelope.messages.errors import NotFoundError
+from envelope.messages.errors import UnauthorizedError
 from envelope.models import Connection
 from envelope.utils import get_message_registry
 
@@ -109,4 +111,43 @@ class DummyContextActionTests(TestCase):
         self.assertTrue(worker.work(burst=True))
         self.assertTrue(
             Connection.objects.filter(channel_name="abc", awol=True).exists()
+        )
+
+    def test_context(self):
+        msg = self._mk_msg(
+            pk=self.conn.pk, mm={"user_pk": self.user.pk, "env": WS_INCOMING}
+        )
+        self.assertEqual(self.conn, msg.context)
+        msg = self._mk_msg(pk=-1, mm={"user_pk": self.user.pk, "env": WS_INCOMING})
+        with self.assertRaises(NotFoundError) as cm:
+            msg.context
+        self.assertEqual(
+            {"key": "pk", "model": "envelope.connection", "value": "-1"},
+            cm.exception.data.dict(),
+        )
+
+    def test_perm(self):
+        msg = self._mk_msg(
+            pk=self.conn.pk, mm={"user_pk": self.user.pk, "env": WS_INCOMING}
+        )
+        self.assertTrue(msg.allowed())
+        msg.permission = "hard to come by"
+        self.assertFalse(msg.allowed())
+
+    def test_perm_raises(self):
+        msg = self._mk_msg(
+            pk=self.conn.pk, mm={"user_pk": self.user.pk, "env": WS_INCOMING}
+        )
+        self.assertIsNone(msg.assert_perm())
+        msg.permission = "hard to come by"
+        with self.assertRaises(UnauthorizedError) as cm:
+            msg.assert_perm()
+        self.assertEqual(
+            {
+                "key": "pk",
+                "model": "envelope.connection",
+                "value": "1",
+                "permission": "hard to come by",
+            },
+            cm.exception.data.dict(),
         )

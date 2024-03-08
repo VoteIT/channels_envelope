@@ -173,7 +173,7 @@ class SubscriptionsSchema(BaseModel):
     '{"subscriptions": [{"pk": 1, "channel_type": "user"}]}'
     """
 
-    subscriptions: list[ChannelSchema]
+    subscriptions: list[ChannelSchema] = ()
 
 
 @add_message(WS_OUTGOING)
@@ -184,7 +184,7 @@ class Subscriptions(Message):
 
 
 class RecheckSubscriptionsSchema(SubscriptionsSchema):
-    consumer_name: str
+    consumer_name: str = ""  # Added later
 
 
 @add_message(INTERNAL)
@@ -195,6 +195,9 @@ class RecheckChannelSubscriptions(DeferredJob):
 
     This is not the same as logging out, rather this is something you may want
     to do when a specific user has new permissions.
+
+    Note that data will be populated by pre_queue method. Calling this without kwargs is the
+    expected behaviour.
     """
 
     name = "channel.recheck"
@@ -206,11 +209,7 @@ class RecheckChannelSubscriptions(DeferredJob):
         assert consumer.channel_name
         # It might be sent by someone else
         self.data.consumer_name = consumer.channel_name
-        [
-            self.data.subscriptions.append(x)
-            for x in consumer.subscriptions
-            if x not in self.data.subscriptions
-        ]
+        self.data.subscriptions.extend(consumer.subscriptions)
 
     @property
     def should_run(self) -> bool:

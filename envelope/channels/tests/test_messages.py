@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
 from django.test import TestCase
+from django.test import TransactionTestCase
 from django.test import override_settings
+from fakeredis import FakeRedis
 
 from envelope.app.user_channel.channel import UserChannel
 from envelope.channels.errors import SubscribeError
@@ -16,13 +19,17 @@ from envelope.channels.messages import Left
 from envelope.channels.messages import ListSubscriptions
 from envelope.channels.messages import Subscribe
 from envelope.channels.messages import Subscribed
+from envelope.channels.messages import Subscriptions
 from envelope.channels.schemas import ChannelSchema
+from envelope.channels.testing import ForceSubscribe
+from envelope.envelopes import incoming
 from envelope.signals import channel_subscribed
 from envelope.testing import TempSignal
 from envelope.testing import WebsocketHello
+from envelope.testing import mk_communicator
 from envelope.testing import mk_consumer
 from envelope.testing import testing_channel_layers_setting
-
+from envelope.testing import work_with_conn
 
 User = get_user_model()
 
@@ -221,11 +228,17 @@ class ListSubscriptionsTests(TestCase):
         )
 
 
-@override_settings(CHANNEL_LAYERS=testing_channel_layers_setting)
+@override_settings(
+    CHANNEL_LAYERS=testing_channel_layers_setting,
+    ENVELOPE_CONNECTIONS_QUEUE=None,
+    ENVELOPE_TIMESTAMP_QUEUE=None,
+)
 class RecheckChannelSubscriptionsTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.user_one: AbstractUser = User.objects.create(username="one")
+
+    def setUp(self):
+        self.user_one: AbstractUser = User.objects.create(username="one")
+        self.user_two: AbstractUser = User.objects.create(username="two")
+        self.client.force_login(self.user_one)
 
     @property
     def _cut(self):
@@ -286,4 +299,52 @@ class RecheckChannelSubscriptionsTests(TestCase):
                 "s": "s",
             },
             payload,
+        )
+
+
+@override_settings(
+    CHANNEL_LAYERS=testing_channel_layers_setting,
+    ENVELOPE_CONNECTIONS_QUEUE=None,
+    ENVELOPE_TIMESTAMP_QUEUE=None,
+)
+class RecheckChannelSubscriptionsFullTests(TransactionTestCase):
+
+    def setUp(self):
+        self.user_one: AbstractUser = User.objects.create(username="one")
+        self.user_two: AbstractUser = User.objects.create(username="two")
+        self.client.force_login(self.user_one)
+
+    @property
+    def _cut(self):
+        from envelope.channels.messages import RecheckChannelSubscriptions
+
+        return RecheckChannelSubscriptions
+
+    async def test_full_lifecycle(self):
+        communicator = await mk_communicator(self.client)
+        for pk in [self.user_one.pk, self.user_two.pk]:
+            msg = ForceSubscribe(pk=pk, channel_type=UserChannel.name)
+            await communicator.send_msg(msg)
+            await communicator.receive_msg()
+        msg = ListSubscriptions()
+        await communicator.send_msg(msg)
+        response = await communicator.receive_msg()
+        self.assertIsInstance(response, Subscriptions)
+        self.assertEqual(
+            {self.user_one.pk, self.user_two.pk},
+            set(x.pk for x in response.data.subscriptions),
+        )
+        # So the wrong group is there
+        fake_redis_conn = FakeRedis()
+        with patch(
+            "django_rq.queues.get_redis_connection",
+            return_value=fake_redis_conn,
+        ):
+            msg = self._cut()
+            await communicator.send_internal(msg)
+            await sync_to_async(work_with_conn)(connection=fake_redis_conn)
+            response = await communicator.receive_msg()
+        self.assertIsInstance(response, Left)
+        self.assertEqual(
+            {"pk": self.user_two.pk, "channel_type": "user"}, response.data.dict()
         )
