@@ -26,6 +26,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+ENVELOPE_TIMESTAMP_QUEUE = "default"
+ENVELOPE_CONNECTIONS_QUEUE = "default"
+
 
 # Application definition
 
