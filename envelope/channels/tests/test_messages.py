@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from asyncio import sleep
 from unittest.mock import patch
 
 from asgiref.sync import sync_to_async
@@ -342,6 +343,7 @@ class RecheckChannelSubscriptionsFullTests(TransactionTestCase):
         ):
             msg = self._cut()
             await communicator.send_internal(msg)
+            await sleep(0.1)
             await sync_to_async(work_with_conn)(connection=fake_redis_conn)
             response = await communicator.receive_msg()
         self.assertIsInstance(response, Left)
