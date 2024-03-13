@@ -1,6 +1,6 @@
 # Changelog
 
-##  unreleased
+##  1.0.3 (2024-03-13)
 
 * Fixed problem with consumer not catching validation errors
 deeper down in message processing.
