@@ -223,21 +223,30 @@ class WebsocketConsumerTests(TransactionTestCase):
 
     async def test_message_validation_error(self):
         communicator = await mk_communicator(self.client)
-        payload = {"t": Subscribe.name, "p": {"pk": 1, "channel_type": "404"}}
+        payload = {
+            "t": Subscribe.name,
+            "p": {"pk": 1, "channel_type": "404"},
+            "i": "subs",
+        }
         await communicator.send_json_to(payload)
-        response = await communicator.receive_msg()
-        self.assertIsInstance(response, ValidationErrorMsg)
+        response = await communicator.receive_json_from(0.2)
         self.assertEqual(
             {
-                "errors": [
-                    {
-                        "loc": ["channel_type"],
-                        "msg": "'404' is not a valid channel",
-                        "type": "value_error",
-                    }
-                ]
+                "t": "error.validation",
+                "p": {
+                    "msg": None,
+                    "errors": [
+                        {
+                            "loc": ["channel_type"],
+                            "msg": "'404' is not a valid channel",
+                            "type": "value_error",
+                        }
+                    ],
+                },
+                "i": "subs",
+                "s": "f",
             },
-            response.data.dict(exclude={"msg"}),
+            response,
         )
 
     async def test_subscriptions_lifecycle(self):

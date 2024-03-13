@@ -147,14 +147,16 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             data = incoming.parse(text_data)
         except ValidationError as exc:
             # FIXME: Count errors
-            error = self.validation_err_msg(errors=exc.errors())
+            error = self.validation_err_msg(errors=exc.errors(), mm=self.get_msg_meta())
             return await self.send_ws_error(error)
         try:
             message = incoming.unpack(data, consumer=self)
         except self.base_error as error:
             return await self.send_ws_error(error)
         except ValidationError as exc:
-            error = self.validation_err_msg(errors=exc.errors())
+            error = self.validation_err_msg(
+                errors=exc.errors(), mm=self.get_msg_meta(i=data.i)
+            )
             return await self.send_ws_error(error)
         self.last_received = now()
         incoming.logger.debug("Received", consumer=self, message=message)

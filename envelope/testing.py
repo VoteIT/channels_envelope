@@ -206,6 +206,9 @@ class EnvelopeWebsocketCommunicator(WebsocketCommunicator):
         await self.send_input({"type": "internal.msg", **data})
 
     async def receive_msg(self) -> Message:
+        """
+        Note: This will strip some message metadata!
+        """
         response = await self.receive_from(0.2)
         # We're guessing here since this is normally frontend domain :)
         data = loads(response)
