@@ -1,5 +1,10 @@
 # Changelog
 
+##  unreleased
+
+* Fixed problem with consumer not catching validation errors
+deeper down in message processing.
+
 ## 1.0.2 (2024-03-08)
 
 * Internal messages needed a custom job which wasn't intuitive or easy to debug.

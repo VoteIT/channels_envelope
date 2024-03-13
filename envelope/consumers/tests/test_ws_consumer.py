@@ -15,6 +15,7 @@ from envelope.async_signals import outgoing_websocket_error
 from envelope.async_signals import outgoing_websocket_message
 from envelope.channels.messages import Leave
 from envelope.channels.messages import ListSubscriptions
+from envelope.channels.messages import Subscribe
 from envelope.envelopes import incoming
 from envelope.envelopes import outgoing
 from envelope.messages.errors import MessageTypeError
@@ -219,6 +220,25 @@ class WebsocketConsumerTests(TransactionTestCase):
         )
         self.assertTrue(self.signal_was_fired)
         await communicator.disconnect()
+
+    async def test_message_validation_error(self):
+        communicator = await mk_communicator(self.client)
+        payload = {"t": Subscribe.name, "p": {"pk": 1, "channel_type": "404"}}
+        await communicator.send_json_to(payload)
+        response = await communicator.receive_msg()
+        self.assertIsInstance(response, ValidationErrorMsg)
+        self.assertEqual(
+            {
+                "errors": [
+                    {
+                        "loc": ["channel_type"],
+                        "msg": "'404' is not a valid channel",
+                        "type": "value_error",
+                    }
+                ]
+            },
+            response.data.dict(exclude={"msg"}),
+        )
 
     async def test_subscriptions_lifecycle(self):
         self.signal_was_fired = False

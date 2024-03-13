@@ -153,6 +153,9 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
             message = incoming.unpack(data, consumer=self)
         except self.base_error as error:
             return await self.send_ws_error(error)
+        except ValidationError as exc:
+            error = self.validation_err_msg(errors=exc.errors())
+            return await self.send_ws_error(error)
         self.last_received = now()
         incoming.logger.debug("Received", consumer=self, message=message)
         # Catch exceptions here?
