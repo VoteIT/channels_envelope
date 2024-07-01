@@ -1,25 +1,15 @@
 from __future__ import annotations
+
 from datetime import datetime
 from logging import getLogger
-from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.utils.translation import activate
 
-from envelope import Error
-from envelope import WS_INCOMING
-from envelope.core.message import ErrorMessage
 from envelope.signals import connection_closed
 from envelope.signals import connection_created
-from envelope.utils import get_envelope
-from envelope.utils import get_error_type
 from envelope.utils import update_connection_status
-from envelope.utils import websocket_send_error
-
-if TYPE_CHECKING:
-    from envelope.deferred_jobs.message import DeferredJob
 
 User = get_user_model()
 
@@ -37,25 +27,6 @@ def _set_lang(lang=None):
     if lang is None:
         lang = settings.LANGUAGE_CODE
     activate(lang)
-
-
-def handle_failure(job, connection, exc_type, exc_value, traceback):
-    """
-    Failure callbacks are functions that accept job, connection, type, value and traceback arguments.
-    type, value and traceback values returned by sys.exc_info(),
-    which is the exception raised when executing your job.
-
-    See RQs docs
-    """
-    mm = job.kwargs.get("mm", {})
-    if mm:
-        message_id = mm.get("id", None)
-        consumer_name = mm.get("consumer_name", None)
-        if message_id and consumer_name:
-            # FIXME: exc value might not be safe here
-            err = get_error_type(Error.JOB)(mm=mm, msg=str(exc_value))
-            websocket_send_error(err, channel_name=consumer_name)
-            return err  # For testing, has no effect
 
 
 def create_connection_status_on_websocket_connect(
@@ -118,41 +89,3 @@ def mark_connection_action(
     action_at: datetime,
 ):
     update_connection_status(user_pk, channel_name=consumer_name, last_action=action_at)
-
-
-def default_job(
-    data: dict, mm: dict, t: str, *, enqueued_at: datetime = None, **kwargs
-):
-    env_name = mm.get("env", WS_INCOMING)
-    envelope = get_envelope(env_name)
-    # We won't handle key error here. Message name should've been checked when it was received.
-    message = envelope.registry[t](mm=mm, data=data)
-    run_job(message, enqueued_at=enqueued_at)
-
-
-def run_job(message: DeferredJob, *, enqueued_at: datetime = None, update_conn=True):
-    message.on_worker = True
-    if message.mm.language:
-        # Otherwise skip lang?
-        activate(message.mm.language)
-    try:
-        if message.atomic:
-            with transaction.atomic(durable=True):
-                message.run_job()
-        else:
-            message.run_job()
-    except ErrorMessage as err:  # Catchable, nice errors
-        if err.mm.id is None:
-            err.mm.id = message.mm.id
-        if err.mm.consumer_name is None:
-            err.mm.consumer_name = message.mm.consumer_name
-        if err.mm.consumer_name:
-            websocket_send_error(err)
-    else:
-        # Everything went fine
-        if update_conn and message.mm.user_pk and message.mm.consumer_name:
-            update_connection_status(
-                user_pk=message.mm.user_pk,
-                channel_name=message.mm.consumer_name,
-                last_action=enqueued_at,
-            )

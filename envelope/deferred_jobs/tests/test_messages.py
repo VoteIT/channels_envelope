@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
+from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django_rq import get_queue
 from fakeredis import FakeStrictRedis
+from pydantic import BaseModel
 from rq import SimpleWorker
 
 from envelope import WS_INCOMING
@@ -22,6 +26,20 @@ class DummyJob(DeferredJob):
         Connection.objects.create(user=self.user, channel_name="abc")
 
 
+class BadJob(DeferredJob):
+    name = "bad_job"
+
+    def run_job(self):
+        return 1 / 0
+
+
+class NeverFoundJob(DeferredJob):
+    name = "bad_at_looking"
+
+    def run_job(self):
+        raise NotFoundError.from_message(self, model="something", value="1")
+
+
 class DummyContextAction(ContextAction):
     name = "dummy_context_action"
     permission = None
@@ -37,20 +55,9 @@ class DeferredJobTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create(username="runner")
-        cls.msg_reg = get_message_registry(WS_INCOMING)
-        cls.msg_reg[DummyJob.name] = DummyJob
-
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        cls.msg_reg.pop(DummyJob.name)
-
-    def _mk_msg(self, **kwargs):
-        msg = DummyJob(**kwargs)
-        return msg
 
     def test_enqueue_via_queue(self):
-        msg = self._mk_msg(mm={"user_pk": self.user.pk})
+        msg = DummyJob(mm={"user_pk": self.user.pk})
         connection = FakeStrictRedis()
         queue = get_queue(connection=connection)
         queue.enqueue(msg.run_job)
@@ -59,7 +66,7 @@ class DeferredJobTests(TestCase):
         self.assertTrue(Connection.objects.filter(channel_name="abc").exists())
 
     def test_enqueue_via_msg(self):
-        msg = self._mk_msg(mm={"user_pk": self.user.pk, "env": WS_INCOMING})
+        msg = DummyJob(mm={"user_pk": self.user.pk, "env": WS_INCOMING})
         connection = FakeStrictRedis()
         queue = get_queue(connection=connection)
         msg.enqueue(
@@ -68,6 +75,55 @@ class DeferredJobTests(TestCase):
         worker = SimpleWorker([queue], connection=connection)
         self.assertTrue(worker.work(burst=True))
         self.assertTrue(Connection.objects.filter(channel_name="abc").exists())
+
+    def test_error_handling(self):
+        msg = BadJob(
+            mm={"user_pk": self.user.pk, "env": WS_INCOMING, "consumer_name": "abc"}
+        )
+        connection = FakeStrictRedis()
+        queue = get_queue(connection=connection)
+        msg.enqueue(queue)
+        worker = SimpleWorker([queue], connection=connection)
+        channel_layer = get_channel_layer()
+        with patch.object(channel_layer, "send") as mock_send:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.assertTrue(worker.work(burst=True))
+        self.assertTrue(mock_send.called)
+        self.assertEqual(
+            {
+                "t": "error.job",
+                "p": {"msg": "division by zero"},
+                "i": None,
+                "s": "f",
+                "type": "ws.error.send",
+            },
+            mock_send.call_args[0][1],
+        )
+
+    def test_job_raises_catchable_error(self):
+        msg = NeverFoundJob(
+            mm={"user_pk": self.user.pk, "env": WS_INCOMING, "consumer_name": "abc"},
+        )
+        connection = FakeStrictRedis()
+        queue = get_queue(connection=connection)
+        msg.enqueue(queue)
+        worker = SimpleWorker([queue], connection=connection)
+        channel_layer = get_channel_layer()
+        with patch.object(channel_layer, "send") as mock_send:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.assertTrue(worker.work(burst=True))
+        self.assertTrue(mock_send.called)
+        self.assertEqual(
+            {
+                "t": "error.job",
+                "p": {"key": "pk", "model": "something", "value": "1"},
+                "i": None,
+                "s": "f",
+                "t": "error.not_found",
+                "type": "ws.error.send",
+            },
+            mock_send.call_args[0][1],
+        )
 
 
 class DummyContextActionTests(TestCase):
@@ -146,7 +202,7 @@ class DummyContextActionTests(TestCase):
             {
                 "key": "pk",
                 "model": "envelope.connection",
-                "value": "1",
+                "value": str(self.conn.pk),
                 "permission": "hard to come by",
             },
             cm.exception.data.dict(),

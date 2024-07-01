@@ -59,43 +59,6 @@ class WebsocketHello(AsyncRunnable):
     async def run(self, **kwargs): ...
 
 
-#
-#
-# @add_message(TESTING_NS)
-# class WebsocketWorld(Message):
-#     name = "testing.world"
-
-
-# async def mk_communicator(user=None, queue: Queue = None):
-#     """
-#     A logged-in user is required for this consumer.
-#     But async/sync doesn't mix well so we'll patch the user
-#     """
-#     from envelope.consumers.websocket import WebsocketConsumer
-#
-#     init_kwargs = {}
-#     if queue:
-#         assert isinstance(queue, Queue)
-#         init_kwargs["connection_queue"] = queue
-#         init_kwargs["timestamp_queue"] = queue
-#
-#     websocket_urlpatterns = [
-#         re_path(r"testws/$", WebsocketConsumer.as_asgi(**init_kwargs))
-#     ]
-#     application = ProtocolTypeRouter(
-#         {"websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns))}
-#     )
-#     communicator = WebsocketCommunicator(application, "/testws/")
-#     if user:
-#         with patch.object(WebsocketConsumer, "get_user", return_value=user):
-#             connected, subprotocol = await communicator.connect()
-#             assert connected
-#     else:
-#         connected, subprotocol = await communicator.connect()
-#         assert connected  # This won't happen
-#     return communicator
-
-
 def mk_simple_worker(queue="default") -> SimpleWorker:
     if isinstance(queue, str):
         queue = get_queue(name=queue)
@@ -108,27 +71,6 @@ def work_with_conn(queue: str = "default", *, connection: FakeRedis):
     worker = SimpleWorker([queue], connection=connection)
     result = worker.work(burst=True)
     assert result, "Worker did noting"
-
-
-# class ResetRegistries:
-#     def __enter__(self):
-#         self.registries = {}
-#         for name, item in registries.__dict__.items():
-#             if isinstance(item, Registry):
-#                 self.registries[name] = deepcopy(item)
-#
-#     def __exit__(self, exc_type, exc_value, traceback):
-#         """
-#         Execute all on_commit hooks and cleanup.
-#         """
-#         for (k, v) in self.registries.items():
-#             registries.__dict__[k] = v
-#         breakpoint()
-# current_run_on_commit = self.connection.run_on_commit
-# self.connection.run_on_commit = []
-# while current_run_on_commit:
-#     sids, func = current_run_on_commit.pop(0)
-#     func()
 
 
 def load_doctests(tests, package, ignore_names: set[str] = frozenset()) -> None:
@@ -150,15 +92,7 @@ def load_doctests(tests, package, ignore_names: set[str] = frozenset()) -> None:
     for importer, name, ispkg in walk_packages(
         package.__path__, package.__name__ + "."
     ):
-        # if not any(
-        #     name.startswith(
-        #         f"{package.__name__}.{x}." or name == f"{package.__name__}.{x}"
-        #     )
-        #     for x in ignore_names
-        # ):
-        #     print(name)
         tests.addTests(doctest.DocTestSuite(name, optionflags=opts))
-        # continue
 
 
 class TempSignal:

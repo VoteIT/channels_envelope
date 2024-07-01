@@ -2,18 +2,24 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from datetime import datetime
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.utils.functional import cached_property
 from django.utils.timezone import now
+from django.utils.translation import activate
 from django_rq import get_queue
 from pydantic import BaseModel
 from rq import Queue
 
 from envelope import DEFAULT_QUEUE_NAME
 from envelope import Error
+from envelope.core.message import ErrorMessage
 from envelope.core.message import Message
 from envelope.utils import get_error_type
+from envelope.utils import update_connection_status
+from envelope.utils import websocket_send_error
 
 if TYPE_CHECKING:
     from django.db.models import Model
@@ -30,10 +36,8 @@ class DeferredJob(Message, ABC):
         None  # Job exec timeout in seconds if you want to override default
     )
     queue: str = DEFAULT_QUEUE_NAME  # Queue name
-    # connection: None | Redis = None
     atomic: bool = True
     on_worker: bool = False
-    job: callable | str = "envelope.deferred_jobs.jobs.default_job"
     should_run: bool = True  # Mark as false to abort run
 
     async def pre_queue(self, **kwargs):
@@ -42,11 +46,60 @@ class DeferredJob(Message, ABC):
         It's a good idea to avoid using this if it's not needed.
         """
 
-    @property
-    def on_failure(self) -> callable | None:
-        from envelope.deferred_jobs.jobs import handle_failure
+    @staticmethod
+    def handle_failure(job, connection, exc_type, exc_value, traceback):
+        """
+        Failure callbacks are functions that accept job, connection, type, value and traceback arguments.
+        type, value and traceback values returned by sys.exc_info(),
+        which is the exception raised when executing your job.
 
-        return handle_failure
+        See RQs docs
+        """
+        mm = job.kwargs.get("mm", {})
+        if mm:
+            if consumer_name := mm.get("consumer_name", None):
+                # FIXME: exc value might not be safe here
+                err = get_error_type(Error.JOB)(mm=mm, msg=str(exc_value))
+                websocket_send_error(err, channel_name=consumer_name)
+                return err  # For testing, has no effect
+
+    @classmethod
+    def init_job(
+        cls,
+        data: dict,
+        mm: dict,
+        t: str,
+        *,
+        enqueued_at: datetime = None,
+        update_conn: bool = True,
+        **kwargs,
+    ):
+        message = cls(mm=mm, data=data)
+        message.on_worker = True
+        if message.mm.language:
+            # Otherwise skip lang?
+            activate(message.mm.language)
+        try:
+            if message.atomic:
+                with transaction.atomic(durable=True):
+                    message.run_job()
+            else:
+                message.run_job()
+        except ErrorMessage as err:  # Catchable, nice errors
+            if err.mm.id is None:
+                err.mm.id = message.mm.id
+            if err.mm.consumer_name is None:
+                err.mm.consumer_name = message.mm.consumer_name
+            if err.mm.consumer_name:
+                websocket_send_error(err)
+        else:
+            # Everything went fine
+            if update_conn and message.mm.user_pk and message.mm.consumer_name:
+                update_connection_status(
+                    user_pk=message.mm.user_pk,
+                    channel_name=message.mm.consumer_name,
+                    last_action=enqueued_at,
+                )
 
     def enqueue(self, queue: Queue | None = None, **kwargs):
         if queue is None:
@@ -55,7 +108,7 @@ class DeferredJob(Message, ABC):
         data = {}
         if self.data:
             data = self.data.dict()
-        kwargs.setdefault("on_failure", self.on_failure)
+        kwargs.setdefault("on_failure", self.handle_failure)
         if self.job_timeout:
             kwargs["job_timeout"] = self.job_timeout
         if self.ttl:
@@ -65,7 +118,7 @@ class DeferredJob(Message, ABC):
                 "To call enqueue on DeferredJob messages, env must be present in message meta."
             )
         return queue.enqueue(
-            self.job,
+            self.init_job,
             t=self.name,
             mm=self.mm.dict(),
             data=data,
