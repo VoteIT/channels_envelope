@@ -1,6 +1,10 @@
 # Changelog
 
-##  1.0.3 (2024-03-13)
+## 1.0.4 (unreleased)
+
+* Loading RQ-job via message class for deferred jobs, to make the code easier to follow + overrides simpler.
+
+## 1.0.3 (2024-03-13)
 
 * Fixed problem with consumer not catching validation errors
 deeper down in message processing.
