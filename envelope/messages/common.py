@@ -3,7 +3,10 @@ from abc import abstractmethod
 
 from pydantic import BaseModel
 
+from envelope import INTERNAL
 from envelope import WS_OUTGOING
+from envelope.consumers.websocket import WebsocketConsumer
+from envelope.core import AsyncRunnable
 from envelope.core.message import Message
 from envelope.decorators import add_message
 
@@ -24,6 +27,29 @@ class ProgressNum(Message):
 @add_message(WS_OUTGOING)
 class Status(Message):
     name = "s.stat"
+
+
+class ClosingSchema(BaseModel):
+    code: int = 1000
+
+
+@add_message(WS_OUTGOING)
+class ClosingConnection(Message):
+    name = "s.closing"
+    schema = ClosingSchema
+    data: ClosingSchema
+
+
+@add_message(INTERNAL)
+class CloseConnection(AsyncRunnable):
+    name = "s.close"
+    schema = ClosingSchema
+    data: ClosingSchema
+
+    async def run(self, *, consumer: WebsocketConsumer, **kwargs):
+        msg = ClosingConnection.from_message(self, data=self.data.dict())
+        await consumer.send_ws_message(msg)
+        await consumer.close(self.data.code)
 
 
 class BatchSchema(BaseModel):

@@ -3,6 +3,7 @@ from unittest.mock import patch
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
+from django.contrib.auth import user_logged_out
 from django.test import override_settings
 from django.test import TransactionTestCase
 from fakeredis import FakeStrictRedis
@@ -10,6 +11,7 @@ from rq import Queue
 from rq import SimpleWorker
 
 from envelope.app.user_channel.channel import UserChannel
+from envelope.envelopes import internal
 from envelope.envelopes import outgoing
 from envelope.messages.common import Status
 from envelope.testing import mk_communicator
@@ -171,9 +173,9 @@ class SubscribeSignalIntegrationTests(TransactionTestCase):
             {
                 "t": "channel.subscribed",
                 "p": {
-                    "pk": 6,
+                    "pk": self.jane.pk,
                     "channel_type": "user",
-                    "channel_name": "user_6",
+                    "channel_name": f"user_{self.jane.pk}",
                     "app_state": None,
                 },
                 "s": "s",
@@ -190,3 +192,17 @@ class SubscribeSignalIntegrationTests(TransactionTestCase):
         self.assertIn(f"user_{self.jane.pk}", layer.groups)
         await communicator.disconnect()
         self.assertNotIn(f"user_{self.jane.pk}", layer.groups)
+
+    async def test_logout_closes_connection(self):
+        communicator = await mk_communicator(self.client, drain=True)
+        await sync_to_async(user_logged_out.send)(sender=User, user=self.jane)
+        response = await communicator.receive_from()
+        payload = internal.parse(response)
+        self.assertEqual(
+            {"t": "s.closing", "p": {"code": 1000}},
+            payload.dict(exclude_none=True),
+        )
+        response = await communicator.receive_output()
+        self.assertEqual({"type": "websocket.close", "code": 1000}, response)
+        await communicator.wait(0.1)
+        self.assertTrue(communicator.future.cancelled())
