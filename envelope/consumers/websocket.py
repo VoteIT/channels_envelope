@@ -29,6 +29,7 @@ from envelope.utils import get_envelope
 from envelope.utils import get_error_type
 
 if TYPE_CHECKING:
+    from envelope.envelopes import Envelope
     from envelope.core.message import ErrorMessage
     from envelope.core.message import Message
     from envelope.messages.errors import ValidationErrorMsg
@@ -161,18 +162,12 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         self.last_received = now()
         incoming.logger.debug("Received", consumer=self, message=message)
         # Catch exceptions here?
-        if incoming.message_signal:
-            await incoming.message_signal.send(
-                sender=message.__class__, message=message, consumer=self
-            )
+        await self.signal_message(message, incoming)
 
     async def send_ws_error(self, error: ErrorMessage):
         self.last_error = now()
         errors = get_envelope(ERRORS)
-        if errors.message_signal:
-            await errors.message_signal.send(
-                sender=error.__class__, message=error, consumer=self
-            )
+        await self.signal_message(error, errors)
         envelope_data = errors.pack(error)
         self.event_logger.info("Sending error", consumer=self, message=error)
         text_data = envelope_data.json()
@@ -180,11 +175,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
 
     async def send_ws_message(self, message: Message):
         outgoing = get_envelope(WS_OUTGOING)
-        self.event_logger.debug("Sending ws", consumer=self, message=message)
-        if outgoing.message_signal:
-            await outgoing.message_signal.send(
-                sender=message.__class__, message=message, consumer=self
-            )
+        await self.signal_message(message, outgoing)
         envelope_data = outgoing.pack(message)
         text_data = envelope_data.json()
         await self.send(text_data=text_data)
@@ -200,10 +191,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         if outgoing.message_signal and outgoing.message_signal.has_listeners(msg_class):
             data = outgoing.parse(event["text_data"])
             message = outgoing.unpack(data, consumer=self)
-            self.event_logger.debug("websocket_send", consumer=self, message=message)
-            await outgoing.message_signal.send(
-                sender=message.__class__, message=message, consumer=self
-            )
+            await self.signal_message(message, outgoing)
         else:
             self.event_logger.debug(
                 f"websocket_send message type {event['t']} without listeners",
@@ -223,10 +211,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         msg_class = errors.registry.get(data.t)
         if errors.message_signal and errors.message_signal.has_listeners(msg_class):
             message = errors.unpack(data, consumer=self)
-            self.event_logger.debug("ws_error_send", consumer=self, message=message)
-            await errors.message_signal.send(
-                sender=message.__class__, message=message, consumer=self
-            )
+            await self.signal_message(message, errors)
         else:
             self.event_logger.debug(
                 f"ws_error_send message type {data.t} without listeners",
@@ -236,7 +221,7 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=text_data)
 
     # async def send_internal(self, message: Message):
-    #     internal = get_envelope_from_message(message)
+    #     internal = get_envelope(INTERNAL)
     #     self.event_logger.debug("Sending internal", consumer=self, message=message)
     #     if internal.message_signal:
     #         await internal.message_signal.send(
@@ -255,7 +240,16 @@ class WebsocketConsumer(AsyncWebsocketConsumer):
         data = internal.schema(**event)
         message = internal.unpack(data, consumer=self)
         self.event_logger.debug("internal_msg", consumer=self, message=message)
-        if internal.message_signal:
-            await internal.message_signal.send(
+        await self.signal_message(message, internal)
+
+    async def signal_message(self, message: Message, envelope: Envelope):
+        if envelope.message_signal:
+            await envelope.message_signal.send(
                 sender=message.__class__, message=message, consumer=self
+            )
+        else:
+            self.event_logger.info(
+                f"Missing message_signal for envelope {envelope.name}",
+                consumer=self,
+                message=message,
             )

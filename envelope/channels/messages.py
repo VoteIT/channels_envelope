@@ -50,7 +50,7 @@ class ChannelCommand:
         return ch(pk, consumer_channel=consumer_name)
 
 
-@add_message(WS_INCOMING)
+@add_message(WS_INCOMING, INTERNAL)
 class Subscribe(ChannelCommand, DeferredJob):
     name = SUBSCRIBE
 

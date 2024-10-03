@@ -141,30 +141,34 @@ of envelope that can be tweaked.
 Remember that message registries will contain some mesasges by default - if you don't want that,
 make sure to clear them.
 
-ENVELOPE_CONNECTIONS_QUEUE - default: None
+ENVELOPE_CONNECTIONS_QUEUE (str) - default: None
 
 : Name of the `RQ` queue to use for jobs that will create Connection objects.
 `None` disables functionality.
 
-ENVELOPE_TIMESTAMP_QUEUE - default: None
+ENVELOPE_TIMESTAMP_QUEUE (str) - default: None
 
 : Name of the `RQ` queue to use for timestamp updates for Connection objects.
 `None` disables functionality.
 
-ENVELOPE_CONNECTION_UPDATE_INTERVAL - in seconds, default: 180
+ENVELOPE_CONNECTION_UPDATE_INTERVAL (int) - in seconds, default: 180
 
 : How often should a timestamp job be queued? `None` disables functionality.
 
-ENVELOPE_BATCH_MESSAGE - default: `envelope.messages.common.BatchMessage`
+ENVELOPE_BATCH_MESSAGE (str) - default: `envelope.messages.common.BatchMessage`
 
 : Which class to use for batch messages.
 
-ENVELOPE_SENDER_UTIL - default: `envelope.utils.SenderUtil`
+ENVELOPE_SENDER_UTIL (str) - default: `envelope.utils.SenderUtil`
 
 : Which class to use for sender util.
 
+ENVELOPE_USER_CHANNEL_SEND_SUBSCRIBE (bool) - default: False
 
-ENVELOPE_ALLOW_UNAUTHENTICATED - default: False
+: Send a subscribe message to the consumer when user connects.
+This behaves the same way as if the client sent a subscribe message manually and will transmit `app_state`.
+
+ENVELOPE_ALLOW_UNAUTHENTICATED (bool) - default: False
 
 : Experimental
 
