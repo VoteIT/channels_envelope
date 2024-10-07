@@ -27,3 +27,6 @@ btest:
 	fi
 	python -m build .
 	cd dist && tar xvfz *.tar.gz
+
+# Upload
+# twine upload dist/* --verbose --repository channels-envelope
