@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.4 (unreleased)
+## 1.0.4 (2024-10-07)
 
 * Added setting `ENVELOPE_USER_CHANNEL_SEND_SUBSCRIBE` to send a subscribe message to consumer rather than just adding
   the client to the users channel.
