@@ -53,6 +53,8 @@ class ChannelCommand:
 @add_message(WS_INCOMING, INTERNAL)
 class Subscribe(ChannelCommand, DeferredJob):
     name = SUBSCRIBE
+    ttl = 20
+    job_timeout = 20
 
     def get_app_state(self, channel: ContextChannel) -> list | None:
         """
@@ -203,6 +205,7 @@ class RecheckChannelSubscriptions(DeferredJob):
     name = "channel.recheck"
     schema = RecheckSubscriptionsSchema
     data: RecheckSubscriptionsSchema
+    job_timeout = 20
 
     async def pre_queue(self, consumer: WebsocketConsumer = None, **kwargs):
         assert consumer

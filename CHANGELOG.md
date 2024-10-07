@@ -6,6 +6,7 @@
   the client to the users channel.
 * `user_logged_out` signal causes a close message to be sent on the user channel, so consumers will be disconnected. 
 * Loading RQ-job via message class for deferred jobs, to make the code easier to follow + overrides simpler.
+* Subscribe-messages have a queue timeout of 20s as default, to avoid subscribe spamming.
 
 ## 1.0.3 (2024-03-13)
 
