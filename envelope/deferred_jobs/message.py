@@ -22,7 +22,9 @@ from envelope.utils import update_connection_status
 from envelope.utils import websocket_send_error
 
 if TYPE_CHECKING:
+    from envelope.consumers.websocket import WebsocketConsumer
     from django.db.models import Model
+    from rq.job import Job
 
 _marker = object()
 
@@ -43,7 +45,7 @@ class DeferredJob(Message, ABC):
     on_worker: bool = False
     should_run: bool = True  # Mark as false to abort run
 
-    async def pre_queue(self, **kwargs):
+    async def pre_queue(self, *, consumer: WebsocketConsumer, **kwargs):
         """
         Do something before entering the queue. Only applies to when the consumer receives the message.
         It's a good idea to avoid using this if it's not needed.
@@ -135,6 +137,11 @@ class DeferredJob(Message, ABC):
             enqueued_at=now(),
             **kwargs,
         )
+
+    async def post_queue(self, *, job: Job, consumer: WebsocketConsumer, **kwargs):
+        """
+        Do something after entering the queue. Only called if the message was actually added to the queue.
+        """
 
     @abstractmethod
     def run_job(self):

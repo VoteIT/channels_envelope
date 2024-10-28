@@ -2,9 +2,10 @@
 
 ## dev
 
-* `DeferredJob` messages now enqueued with fully qualified name so they're traceable.
+* `DeferredJob` now enqueued with fully qualified name so they're traceable.
 * `DeferredJob` results returned now stored as RQ result.
-* `DeferredJob` classes can now set RQ defaults message wide via `ttl`, `result_ttl`, `job_timeout`, `failure_ttl`.
+* `DeferredJob` can now set RQ defaults message wide via `ttl`, `result_ttl`, `job_timeout`, `failure_ttl`.
+* `DeferredJob` async method `post_queue` similar to `pre_queue` but with actual job passed along.
 
 ## 1.0.4 (2024-10-07)
 

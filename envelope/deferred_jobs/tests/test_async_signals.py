@@ -1,4 +1,5 @@
 from datetime import datetime
+from unittest import mock
 from unittest.mock import patch
 
 from asgiref.sync import sync_to_async
@@ -134,16 +135,15 @@ class DeferredJobsAsyncSignalsTests(TestCase):
         self.assertIsInstance(connection.last_action, datetime)
 
     async def test_queue_deferred_job(self):
+
+        self.mock_consumer.user_pk = self.user.pk
+
         msg = Subscribe(
             mm={"user_pk": self.user.pk, "env": WS_INCOMING},
             channel_type="user",
             pk=self.user.pk,
         )
-
-        self.mock_consumer.user_pk = self.user.pk
-        # self.mock_consumer.connection_update_interval = 10
-        # self.user = self.user
-
+        msg.post_queue = mock.AsyncMock()
         with patch(
             "django_rq.queues.get_redis_connection",
             return_value=self.fake_redis_conn,
@@ -168,6 +168,9 @@ class DeferredJobsAsyncSignalsTests(TestCase):
             },
             response.data.dict(),
         )
+        self.assertTrue(msg.post_queue.called)
+        self.assertIn("job", msg.post_queue.mock_calls[0].kwargs)
+        self.assertIn("consumer", msg.post_queue.mock_calls[0].kwargs)
 
     async def test_queue_deferred_job_wrong_msg_type(self):
         self.mock_consumer.user_pk = self.user.pk

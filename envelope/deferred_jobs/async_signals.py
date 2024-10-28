@@ -102,5 +102,6 @@ async def queue_deferred_job(
     if isinstance(message, DeferredJob):
         await message.pre_queue(consumer=consumer, **kwargs)
         if message.should_run:
-            message.enqueue()
+            job = message.enqueue()
             consumer.last_job = now()
+            await message.post_queue(job=job, consumer=consumer, **kwargs)
