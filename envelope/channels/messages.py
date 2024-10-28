@@ -85,22 +85,23 @@ class Subscribe(ChannelCommand, DeferredJob):
         await consumer.send_ws_message(msg)
         return msg  # For testing
 
-    def run_job(self) -> Subscribed:
+    def run_job(self) -> dict:
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
         if channel.allow_subscribe(self.user):
             async_to_sync(channel.subscribe)()
             app_state = self.get_app_state(channel)
+            data_dict = self.data.dict()
             msg = Subscribed.from_message(
                 self,
                 state=self.SUCCESS,
                 channel_name=channel.channel_name,
                 app_state=app_state,
-                **self.data.dict(),
+                **data_dict,
             )
             websocket_send(msg)
-            return msg
+            return data_dict
         else:
             raise get_error_type(Error.SUBSCRIBE).from_message(
                 self,
@@ -218,7 +219,7 @@ class RecheckChannelSubscriptions(DeferredJob):
     def should_run(self) -> bool:
         return bool(self.data.subscriptions)
 
-    def run_job(self) -> list[ChannelSchema]:
+    def run_job(self) -> list[dict]:
         registry = get_context_channel_registry()
         # We don't really know if someone is subscribing due to how channels work, but we won't resubscribe
         results = []  # The returned data is meant for unit-testing and similar
@@ -241,4 +242,4 @@ class RecheckChannelSubscriptions(DeferredJob):
                 )
                 websocket_send(msg, channel_name=self.data.consumer_name)
                 results.append(channel_info)
-        return results
+        return [x.dict() for x in results]

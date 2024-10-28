@@ -87,9 +87,8 @@ class SubscribeTests(TestCase):
 
     def test_run_job(self):
         msg = self._mk_msg(self.user_one.pk, user=self.user_one)
-        response = msg.run_job()
-        self.assertIsInstance(response, Subscribed)
-        self.assertEqual(self._cut.SUCCESS, response.mm.state)
+        result = msg.run_job()
+        self.assertEqual({"pk": self.user_one.pk, "channel_type": "user"}, result)
 
     def test_run_job_wrong_user(self):
         msg = self._mk_msg(self.user_one.pk, user=self.user_two)

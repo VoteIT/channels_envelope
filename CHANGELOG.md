@@ -2,6 +2,7 @@
 
 ## dev
 
+* PubSub-related messages `run_job` method now return values rather than messages to make result storage easier.
 * `DeferredJob` now enqueued with fully qualified name so they're traceable.
 * `DeferredJob` results returned now stored as RQ result.
 * `DeferredJob` can now set RQ defaults message wide via `ttl`, `result_ttl`, `job_timeout`, `failure_ttl`.
