@@ -24,6 +24,7 @@ class DummyJob(DeferredJob):
 
     def run_job(self):
         Connection.objects.create(user=self.user, channel_name="abc")
+        return "That went OK!"
 
 
 class BadJob(DeferredJob):
@@ -87,6 +88,31 @@ class DeferredJobTests(TestCase):
             "envelope.deferred_jobs.tests.test_messages.DummyJob.init_job",
             job.func_name,
         )
+
+    def test_set_message_defaults(self):
+        msg = DummyJob(mm={"user_pk": self.user.pk, "env": WS_INCOMING})
+        msg.result_ttl = 99
+        connection = FakeStrictRedis()
+        queue = get_queue(connection=connection)
+        job = msg.enqueue(
+            queue=queue,
+        )
+        self.assertEqual(
+            99,
+            job.result_ttl,
+        )
+
+    def test_results(self):
+        msg = DummyJob(mm={"user_pk": self.user.pk, "env": WS_INCOMING})
+        connection = FakeStrictRedis()
+        queue = get_queue(connection=connection)
+        job = msg.enqueue(
+            queue=queue,
+        )
+        worker = SimpleWorker([queue], connection=connection)
+        self.assertTrue(worker.work(burst=True))
+        job.refresh()
+        self.assertEqual("That went OK!", job.result)
 
     def test_error_handling(self):
         msg = BadJob(

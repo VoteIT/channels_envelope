@@ -24,18 +24,21 @@ from envelope.utils import websocket_send_error
 if TYPE_CHECKING:
     from django.db.models import Model
 
+_marker = object()
+
 
 class DeferredJob(Message, ABC):
     """
     Command/query can be deferred to a job queue
     """
 
-    # Related to RQ
-    ttl: int | None = None  # Queue timeout in seconds if you want to override default
-    job_timeout: int | None = (
-        None  # Job exec timeout in seconds if you want to override default
-    )
+    # Related to RQ - these values override queue default and sets a message default
+    ttl: int | None = None  # Queue timeout in seconds
+    result_ttl: int | None = None  # Keep result,in seconds
+    job_timeout: int | None = None  # Job exec timeout in seconds
+    failure_ttl: int | None = None  # Keep result, in seconds
     queue: str = DEFAULT_QUEUE_NAME  # Queue name
+    # Envelope/Django things
     atomic: bool = True
     on_worker: bool = False
     should_run: bool = True  # Mark as false to abort run
@@ -79,12 +82,13 @@ class DeferredJob(Message, ABC):
         if message.mm.language:
             # Otherwise skip lang?
             activate(message.mm.language)
+        result = None
         try:
             if message.atomic:
                 with transaction.atomic(durable=True):
-                    message.run_job()
+                    result = message.run_job()
             else:
-                message.run_job()
+                result = message.run_job()
         except ErrorMessage as err:  # Catchable, nice errors
             if err.mm.id is None:
                 err.mm.id = message.mm.id
@@ -100,6 +104,7 @@ class DeferredJob(Message, ABC):
                     channel_name=message.mm.consumer_name,
                     last_action=enqueued_at,
                 )
+        return result
 
     def enqueue(self, queue: Queue | None = None, **kwargs):
         if queue is None:
@@ -109,10 +114,12 @@ class DeferredJob(Message, ABC):
         if self.data:
             data = self.data.dict()
         kwargs.setdefault("on_failure", self.handle_failure)
-        if self.job_timeout:
-            kwargs["job_timeout"] = self.job_timeout
-        if self.ttl:
-            kwargs["ttl"] = self.ttl
+        for attr_name in ("job_timeout", "ttl", "result_ttl", "failure_ttl"):
+            if attr_name in kwargs:
+                continue
+            attr_v = getattr(self, attr_name, _marker)
+            if attr_v != _marker:
+                kwargs[attr_name] = attr_v
         if self.mm.env is None:
             raise ValueError(
                 "To call enqueue on DeferredJob messages, env must be present in message meta."
@@ -132,7 +139,8 @@ class DeferredJob(Message, ABC):
     @abstractmethod
     def run_job(self):
         """
-        Run this within the worker to do the actual job
+        Run this within the worker to do the actual job.
+        Note: Anything returned here will be stored by RQ, depending on the result_ttl setting
         """
         pass
 
