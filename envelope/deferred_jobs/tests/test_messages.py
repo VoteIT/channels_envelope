@@ -76,6 +76,18 @@ class DeferredJobTests(TestCase):
         self.assertTrue(worker.work(burst=True))
         self.assertTrue(Connection.objects.filter(channel_name="abc").exists())
 
+    def test_job_name(self):
+        msg = DummyJob(mm={"user_pk": self.user.pk, "env": WS_INCOMING})
+        connection = FakeStrictRedis()
+        queue = get_queue(connection=connection)
+        job = msg.enqueue(
+            queue=queue,
+        )
+        self.assertEqual(
+            "envelope.deferred_jobs.tests.test_messages.DummyJob.init_job",
+            job.func_name,
+        )
+
     def test_error_handling(self):
         msg = BadJob(
             mm={"user_pk": self.user.pk, "env": WS_INCOMING, "consumer_name": "abc"}

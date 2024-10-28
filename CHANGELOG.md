@@ -2,7 +2,7 @@
 
 ## dev
 
-
+* `DeferredJob` messages now enqueued with fully qualified name so they're traceable.
 
 ## 1.0.4 (2024-10-07)
 

@@ -117,8 +117,11 @@ class DeferredJob(Message, ABC):
             raise ValueError(
                 "To call enqueue on DeferredJob messages, env must be present in message meta."
             )
+        qualname = ".".join(
+            [self.__class__.__module__, self.__class__.__name__, "init_job"]
+        )
         return queue.enqueue(
-            self.init_job,
+            qualname,
             t=self.name,
             mm=self.mm.dict(),
             data=data,
