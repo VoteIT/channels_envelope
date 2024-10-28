@@ -5,12 +5,13 @@ from json import dumps
 from json import loads
 from pkgutil import walk_packages
 from typing import TYPE_CHECKING
+from unittest.mock import PropertyMock
 from unittest.mock import patch
 
+from async_signals import Signal as AsyncSignal
 from channels.auth import AuthMiddlewareStack
 from channels.testing import WebsocketCommunicator
 from django.dispatch import Signal
-from async_signals import Signal as AsyncSignal
 from django_rq import get_queue
 from pydantic import BaseModel
 from rq import Queue
@@ -22,15 +23,16 @@ from envelope import WS_INCOMING
 from envelope import WS_OUTGOING
 from envelope import WS_SEND_TRANSPORT
 from envelope.core import Message
-from envelope.core.transport import DictTransport
 from envelope.core.envelope import Envelope
 from envelope.core.message import AsyncRunnable
+from envelope.core.transport import DictTransport
 from envelope.decorators import add_message
 from envelope.messages.testing import ClientInfo
 from envelope.messages.testing import SendClientInfo
 from envelope.schemas import OutgoingEnvelopeSchema
 from envelope.utils import add_envelopes
 from envelope.utils import get_envelope
+from envelope.utils import get_sender_util
 
 if TYPE_CHECKING:
     from envelope.channels.models import PubSubChannel
@@ -185,7 +187,40 @@ async def mk_communicator(client=None, drain=True, headers=()):
     return communicator
 
 
-class ChannelMessageCatcher:
+class BaseMessageCatcher:
+    messages: list
+
+    def __init__(
+        self,
+        *args: type[Message] | str,
+    ):
+
+        filter = set()
+        for f in args:
+            if isinstance(f, str):
+                filter.add(f)
+            elif issubclass(f, Message):
+                filter.add(f.name)
+            else:
+                raise TypeError("Filter args must be string or Message type")
+        self.filter = filter or None
+        self.messages = []
+
+    def __iter__(self) -> iter[Message]:
+        return iter(self.messages)
+
+    def __bool__(self) -> bool:
+        return bool(self.messages)
+
+    def __contains__(self, item: Message | str) -> bool:
+        if isinstance(item, str):
+            return any(x for x in self if x.name == item)
+        elif isinstance(item, Message):
+            return item in self.messages
+        return False
+
+
+class ChannelMessageCatcher(BaseMessageCatcher):
     """
     Helper for sync_publish for instance
 
@@ -208,25 +243,13 @@ class ChannelMessageCatcher:
         self,
         channel: type[PubSubChannel],
         *args: type[Message] | str,
-        method: str = "sync_publish",
     ):
+        super().__init__(*args)
         self.channel = channel
         self.mock = None
-        assert hasattr(channel, method)
-        self.method = method
-        filter = set()
-        for f in args:
-            if isinstance(f, str):
-                filter.add(f)
-            elif issubclass(f, Message):
-                filter.add(f.name)
-            else:
-                raise TypeError("Filter args must be string or Message type")
-        self.filter = filter or None
-        self.messages = []
 
     def __enter__(self) -> list[Message]:
-        self._patch = patch.object(self.channel, self.method, return_value=None)
+        self._patch = patch.object(self.channel, "sync_publish", return_value=None)
         self.mock = self._patch.start()
         return self.messages
 
@@ -238,18 +261,60 @@ class ChannelMessageCatcher:
             if self.filter is None or msg.name in self.filter:
                 self.messages.append(msg)
 
-    def __iter__(self) -> iter[Message]:
-        return iter(self.messages)
 
-    def __bool__(self) -> bool:
-        return bool(self.messages)
+class MessageCatcher(BaseMessageCatcher):
+    """
+    Helper for messages for non-channel messages sent directly to a consumer.
 
-    def __contains__(self, item: Message | str) -> bool:
-        if isinstance(item, str):
-            return any(x for x in self if x.name == item)
-        elif isinstance(item, Message):
-            return item in self.messages
-        return False
+    >>> from envelope.messages.ping import Ping
+
+    >>> from envelope.utils import websocket_send
+    >>> msg = Ping()
+    >>> with MessageCatcher(Ping) as messages:
+    ...     websocket_send(msg, on_commit=False, channel_name='abc')
+    >>> len(messages)
+    1
+    >>> with MessageCatcher('only_this_type') as messages:
+    ...     websocket_send(msg, on_commit=False, channel_name='abc')
+    >>> len(messages)
+    0
+    >>> from django.db import transaction
+
+    >>> with MessageCatcher(Ping) as messages:
+    ...     with transaction.atomic():
+    ...         websocket_send(msg, on_commit=True, channel_name='abc')
+    >>> len(messages)
+    1
+    """
+
+    def __init__(
+        self,
+        *args: type[Message] | str,
+    ):
+        super().__init__(*args)
+        self.mock_message = None
+        self.mock_call = None
+
+    def __enter__(self) -> list[Message]:
+        self._patch_message = patch.object(
+            get_sender_util(), "message", new_callable=PropertyMock
+        )
+        self._patch_call = patch.object(
+            get_sender_util(), "__call__", return_value=None
+        )
+        self.mock_message = self._patch_message.start()
+        self.mock_call = self._patch_call.start()
+        return self.messages
+
+    def __exit__(self, *args):
+        self._patch_message.stop()
+        self._patch_call.stop()
+        for call in self.mock_message.mock_calls:
+            if call.args:
+                msg = call.args[0]
+                assert isinstance(msg, Message)
+                if self.filter is None or msg.name in self.filter:
+                    self.messages.append(msg)
 
 
 def serialization_check(instance: BaseModel) -> str:

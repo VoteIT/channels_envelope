@@ -140,6 +140,8 @@ class SenderUtil:
     Made callable, so it can be added to the on_commit hook in django.
     """
 
+    message: Message = None
+
     def __init__(
         self,
         message: Message,
