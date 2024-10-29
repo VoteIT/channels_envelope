@@ -1,6 +1,6 @@
 # Changelog
 
-## dev
+## 1.1.0 (2024-10-29)
 
 * PubSub-related messages `run_job` method now return values rather than messages to make result storage easier.
 * `DeferredJob` now enqueued with fully qualified name so they're traceable.
