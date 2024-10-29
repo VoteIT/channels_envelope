@@ -23,6 +23,7 @@ from envelope.utils import get_error_type
 from envelope.utils import websocket_send
 
 if TYPE_CHECKING:
+    from rq.job import Job
     from envelope.consumers.websocket import WebsocketConsumer
 
 SUBSCRIBE = "channel.subscribe"
@@ -70,9 +71,11 @@ class Subscribe(ChannelCommand, DeferredJob):
         if app_state:
             return list(app_state)
 
-    async def pre_queue(self, consumer: WebsocketConsumer, **kwargs) -> Subscribed:
+    async def pre_queue(self, *, consumer: WebsocketConsumer, **kwargs):
         if self.mm.consumer_name is None:
             self.mm.consumer_name = consumer.channel_name
+
+    async def post_queue(self, *, job: Job, consumer: WebsocketConsumer, **kwargs):
         channel = self.get_channel(
             self.data.channel_type, self.data.pk, self.mm.consumer_name
         )
@@ -83,7 +86,6 @@ class Subscribe(ChannelCommand, DeferredJob):
             **self.data.dict(),
         )
         await consumer.send_ws_message(msg)
-        return msg  # For testing
 
     def run_job(self) -> dict:
         channel = self.get_channel(

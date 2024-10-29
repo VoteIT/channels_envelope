@@ -7,6 +7,7 @@
 * `DeferredJob` results returned now stored as RQ result.
 * `DeferredJob` can now set RQ defaults message wide via `ttl`, `result_ttl`, `job_timeout`, `failure_ttl`.
 * `DeferredJob` async method `post_queue` similar to `pre_queue` but with actual job passed along.
+* A new context manager `envelope.testing.MessageCatcher` to help with unit testing.
 
 ## 1.0.4 (2024-10-07)
 

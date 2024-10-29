@@ -74,12 +74,11 @@ class SubscribeTests(TestCase):
         self.assertEqual(1, len(app_state))
         self.assertEqual({"t": WebsocketHello.name, "p": None}, app_state[0])
 
-    async def test_pre_queue(self):
+    async def test_post_queue(self):
         msg = self._mk_msg(1)
         consumer = mk_consumer()
         with patch.object(consumer, "send") as mocked_send:
-            result = await msg.pre_queue(consumer)
-        self.assertIsInstance(result, Subscribed)
+            await msg.post_queue(consumer=consumer, job=None)
         self.assertTrue(mocked_send.called)
         self.assertIn("text_data", mocked_send.mock_calls[0].kwargs)
         text_data = mocked_send.mock_calls[0].kwargs["text_data"]
@@ -266,7 +265,7 @@ class RecheckChannelSubscriptionsTests(TestCase):
         sub2 = ChannelSchema(pk=-1, channel_type=UserChannel.name)
         consumer.subscriptions.add(sub1)
         msg = self._mk_msg(subscriptions={sub2})
-        await msg.pre_queue(consumer)
+        await msg.pre_queue(consumer=consumer)
         self.assertEqual({sub1, sub2}, set(msg.data.subscriptions))
 
     def test_should_run(self):
